@@ -1,4 +1,4 @@
-#TinyGPU - Eklavya
+# TinyGPU - Eklavya
 
 Your CPU handles tasks one after another, quickly but sequentially. A GPU does something fundamentally different, it runs thousands of operations at the same instant, across hundreds of small processors working in coordination. That single architectural decision is what makes real-time gaming, video rendering, and modern AI possible.
 
