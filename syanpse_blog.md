@@ -1,4 +1,4 @@
-<img width="652" height="142" alt="image" src="https://github.com/user-attachments/assets/81d38b5a-5121-4cdc-bdc3-5b4e50b85b9d" /># Overview
+# Overview
 
 Synapse32 is a cpu made using riscV ISA  
 
