@@ -1,9 +1,11 @@
-# Overview
+<img width="652" height="142" alt="image" src="https://github.com/user-attachments/assets/81d38b5a-5121-4cdc-bdc3-5b4e50b85b9d" /># Overview
 
 Synapse32 is a cpu made using riscV ISA  
 
 In this blog I'll try to explain what each part of pipeline tries to do and co-relate the pipeline abstraction and the actual verilog modules.  
 I will also identify which parts are going to be used in TinyGPU and which probably won't.  
+
+Part C and D: Hazard Handling, CSR
 
 It has the following pipeline:
 
@@ -115,3 +117,40 @@ The only task is to layout these cores such that they can do row - column operat
 <p align="center">Image 7: Zoom in image of SM-NVidia showing register file
 
 * Another thing which I'm not familiar with yet is a systolic array. I think what they do is pass data as it comes without having to store and load it repeatedly which allows for data reuse (= good performance)
+
+___
+___
+### C) Hazard Handling in Synapse and corelation with TinyGPU
+
+So synapse32 handles hazard/ error handling and this part focuses on understanding the nature of hazard in comp arch and what potential hazards are in a parallel processor.  
+
+> #### 1. Read after Write (RAW) Hazard
+This is when there are multiple operations to be done (like multiply then add) and we have to wait for the threads in operation 1 to complete working before moving to next.  
+<img width="922" height="477" alt="image" src="https://github.com/user-attachments/assets/09310803-86e7-44a6-aa4a-bca0fec15d59" />  
+<p align="center">Image 8: RAW Hazard, source: https://www.csd.uwo.ca/~mmorenom/cs3350_moreno.Winter-2017/notes/L6-ILP-2.pdf </p>
+
+In this if we try to do the sub instruction before the add we get wrong or garbage values.  
+An example of this is matrix multiplication:  IF I forget to multiply a[0,0] * b[0,0] and directly move on to the sum a[1,1]*b[1,1] my c[0,0] will give incorrect results.
+
+In GPU's this can be handled by <mark>__syncthreads()</mark> which is something I learnt in CUDA C++  
+__syncthreads() ensures that none of the code 
+
+Example usage:  
+<img width="652" height="142" alt="image" src="https://github.com/user-attachments/assets/7b15ceec-ae6c-474c-876a-e13ae1c1fe9e" />
+<p align="center"> Image 9: usage of __syncthreads() in parallel programming <br> Source: https://stackoverflow.com/questions/54825498/cuda-programming-reducing-with-complete-unrolling-without-syncthreads
+
+in this till all threads reach a "valid" state they are not allowed to move on to the next operation, ensuring no garbage data is sent to the next operation.
+
+____
+
+> ####2. Warp and Branch Divergence / Control and Branch Hazards
+
+Branch Divergence is when in the same operation a set of threads choose to take different paths. A example (tho it is not part of tiny gpu scope) is activation functions like ReLU or leaky ReLU
+<img width="645" height="467" alt="image" src="https://github.com/user-attachments/assets/e8fe3865-c3ee-42d3-8a8d-e4cd8d30504a" />
+
+<p align="center"> Image 10: Branch Divergence visualisation. Source: https://brrrviz.com/warp-divergence/conditional-branches  </p>
+
+A few ways that I know on how to handle branch divergence is  
+a. giving data properly (first 500 elements execute if() and next 500 do the else() )
+b. some times when we launch threads we have a fixed launching (like 256 threads are launched) but if the input matrix/ vector is of >256 it causes stalling since only 256 threads will be used at a time.
+c. tile the matrix to have only 256 threads at a time and rest are stored in a faster shared memory to improve performance
