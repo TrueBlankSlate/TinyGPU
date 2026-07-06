@@ -1,0 +1,117 @@
+﻿Hello Everyone. In today’s blog I will be trying to explain the synapse 32 architecture.
+
+
+
+Synapse 32 is an  32 bit RISC V CPU coded  using verilog .It functions as a linker between hardware and software.   
+
+
+Firstly we will talk about how the code flows and through what stages does it go. This process is called pipeline and it has 5 main parts
+    • Fetch Instructions code
+    • Decode code
+    • Execute code
+    • Register memory
+    • Writeback
+
+
+
+1.] FETCH INSTRUCTIONS CODE
+
+
+This process uses  the parts:-PC, IMEM.
+    • PC:-   Program Counter is firstly used to store the address of the instructions. I would like to stress on the fact that it stores the address of instructions and not the  instruction itself. The inputs of a PC is given by Control unit
+    • i_mem:-It acts like a storage for storing instructions. Its job is to receive input from program counter(address of the instruction) and give the instruction stored in I_Mem to the decoder. It feeds 32 bit instruction to the decoders. Those instructions are in the form as given below:-
+     
+
+
+
+
+This instruction set might change for different type of instructions. For example this is R Type which is useful for athematic operations like add,subtract,multiply and logical operations like bitwise shift,logic gate or etc.
+
+suppose we write add x1,x2,x3 in an assembly program.
+This simply means we do :_
+x1=x2+x3
+
+
+    • func7,  func3 stores the type of execution that is supposed to be done in the execution stage. These will store the type of operation(athematic Bit wise) and what function to do (Add/subtract).
+      
+    •  Operand (opcode) :-stores information about  the type of instruction set (R ,I, J,B . I have explained these later) is stored here.
+
+    • rs1 and rs2 :- These store address of the variables we are working with. In this case it stores the address of the variables x2 and x3.
+
+    • rd:- It is used to specify the location of where the address of the  output should be kept. Here in this case it will store the address  of  x3. 
+
+
+
+
+Some different type of instruction set are
+
+    • R type:-It has been explained above.
+
+    • I type:- This type is useful for operations of type:-
+    			add x1,x2,4 .This translates to x1=x2+4.
+Here we don’t need to store the address of 4 and only require storing the address of x1 and x2. So the Data provided my mem looks like this:-
+
+The value of the constant  is stored in the imm block..
+
+
+    • S/B type:-These are used when we used for loops and if statements in our assembly code. There bits arrangement looks like this:-
+    • 
+
+
+
+    • J types:-These  are used mostly function call. Lets say I have a function used for jump. Mostly used for function call. Lets say I have a function ADD that add 2 numbers and I call it. Then that address of add will be stored in the imm bit place.
+
+
+.
+ 
+2]Decode:-
+This part uses :- decoder,control unit,register file
+
+Now these memory types go to the decoder. Here the 32 bits from the above step are sliced by the decoder .The code for slicing may be done in this manner:-
+
+opcode = instruction[6:0];
+rd      = instruction[11:7];
+funct3  = instruction[14:12];
+rs1     = instruction[19:15];
+rs2     = instruction[24:20];
+funct7  = instruction[31:25];
+Then this part is given to the register file which provides the value of the instructions and send it the control unit. Now control unit reads the data, fetches the data from register file using the address information  and send that data over to the ALU for execution.
+
+
+
+
+
+
+
+3] Execute:-
+This part uses ALU:-
+
+
+Now the value from the CU (Control Unit) which was passed to ALU (Arithmetic logic unit) is used by ALU for calculations. ALU firstly uses func3 and func7 to determine the type of  calculation. AN example below illustrates this (Unfortunately in our Example, func3 and func7 have already been decoded by the CU and it has been converted into the instr_id variable) :-
+
+
+
+Now the ALU calculates the output using the 2 inputs given to it by the CU.
+
+
+
+After this the ALU gives the output again to CU.
+
+
+
+ 4]Register Memory
+This part uses CU,Register memory,D_MEM.
+
+
+In this step the data that the CU got from ALU is stored in Register file and D_MEM (Data Memory). This data may be the value of a variable and its address(rd variable in the fetch section).
+
+    • Register file :-  It is an ultra fast data and memory storage  that is suitable for small things like 16/32 bit  number storage. Not suitable for storing larger numbers
+    • D_MEM:-   Its another memory that is a bit slower than Register file ,however it can store larger inputs like vectors,arrays, strings , objects, etc. If the memory of Register file is full then the CPU may input its data in D_MEM .
+
+
+
+
+
+5] Writeback
+
+This stage sends  whatever data we have in Register file and D_MEM to the output. This output may be something like a seven segment display,etc. 
