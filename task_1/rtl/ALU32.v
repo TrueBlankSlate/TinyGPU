@@ -1,3 +1,4 @@
+// Code your design here
 module ALU(
     input wire [31:0] a,
     input wire [31:0] b,
@@ -20,7 +21,7 @@ module ALU(
             4'b1100: x = ~a; //not of a
             4'b1101: x = ~b; //not of b
             4'b1111: x = a*b; //multiply
-            4'b0000: x = a; //pass over a
+            4'b0000: x = a/b; //divide a by b
             default: x = 0;
         endcase
     end
