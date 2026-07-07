@@ -1,7 +1,9 @@
 ## EP Wave output
 ___
-<img width="1741" height="233" alt="image" src="https://github.com/user-attachments/assets/3d35a3f4-9f64-4803-9cd7-5549d5677372" />
+<img width="1855" height="230" alt="image" src="https://github.com/user-attachments/assets/bad14a46-dbd8-47a0-9b81-842f8c44c03f" />
+
 
 ## $monitor output (text)
 ___
-<img width="640" height="522" alt="image" src="https://github.com/user-attachments/assets/4c101144-a51b-42c0-a0fa-36da6ae00821" />
+<img width="556" height="437" alt="image" src="https://github.com/user-attachments/assets/f8026872-63ad-4e40-8b4d-d2392d8b28d8" />
+
