@@ -21,7 +21,7 @@ module ALU(
             4'b1100: x = ~a; //not of a
             4'b1101: x = ~b; //not of b
             4'b1111: x = a*b; //multiply
-            4'b0000: x = a/b; //divide a by b
+            4'b0000: x = (b!=0)?a/b:32'b0; //divide a by b
             default: x = 0;
         endcase
     end
