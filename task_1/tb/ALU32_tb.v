@@ -27,6 +27,7 @@ module alu_tb;
         #10 b=32'd0006; opcode=4'b1101;
         #10 a=7; b=32'd6; opcode=4'b1111;
         #10 a=32'd120; opcode=4'b0000;
+        #10 a = 32'd24; b=32'd0; opcode = 4'b0000;
         #10 $finish;
     end
 
