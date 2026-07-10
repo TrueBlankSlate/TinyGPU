@@ -15,11 +15,9 @@ module RegisterFile(
     // 32 registers, each 32 bits
     reg [31:0] registers [0:31];
 
-    // Asynchronous Read
     assign read_data1 = registers[rs1_addr];
     assign read_data2 = registers[rs2_addr];
-
-    // Synchronous Write
+    
     always @(posedge clk) begin
         if (we)
             registers[write_addr] <= data;
