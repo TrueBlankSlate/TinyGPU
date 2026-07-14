@@ -7,7 +7,7 @@ A single instruction operates on
 vectors of data, which results in dozens of register–register operations on independent data elements.  
 
 ## 1. VMIPS:   
-Vector Million Instruction Per second is a vector architecture mentioned in the book.  
+Vector Micro Instruction Per second is a vector architecture mentioned in the book.  
 Vector here means a 1-Dimensional Array of FP values.  
 It has 4 main parts:
 

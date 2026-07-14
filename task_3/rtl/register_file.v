@@ -13,7 +13,7 @@ module RegisterFile(
     output wire [31:0] read_data2
 );
 
-    // 32 registers, each 32 bits
+    // 32 registers, each 16 bits
     reg [31:0] registers [0:31];
 
     assign read_data1 = registers[rs1_addr];

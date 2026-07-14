@@ -58,7 +58,7 @@ initial begin
     #10; we = 1; rd = 5'b00001; write_data = 32'd45; 
 
     // Write 15 into R2
-    #10; rd = 5'd00010; write_data = 32'd15;
+    #10; rd = 5'b00010; write_data = 32'd15;
 
     // Read registers
     #10 we = 0; rs1 = 5'b00001; rs2 = 5'd2;
