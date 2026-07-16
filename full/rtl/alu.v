@@ -1,4 +1,3 @@
-// Code your design here
 module ALU(
     input wire [31:0] a,
     input wire [31:0] b,

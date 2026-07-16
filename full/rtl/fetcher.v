@@ -1,3 +1,4 @@
+//made by aman
 `default_nettype none
 `timescale 1ns/1ps
 
@@ -24,9 +25,8 @@ module fetcher #(
     input wire [PROGRAM_MEM_DATA_BITS-1:0] instr_data,
 
     // decoder interface
-    output reg [PROGRAM_MEM_DATA_BITS-1:0] instruction,
-    output reg [PROGRAM_MEM_ADDR_BITS-1:0] pc
-
+    output reg [PROGRAM_MEM_DATA_BITS-1:0] instruction, //connect to decoder.v input [31:0] instr
+    output reg [PROGRAM_MEM_ADDR_BITS-1:0] pc //connect to pc if we make one.
 );
 
 always @(posedge clk) begin
