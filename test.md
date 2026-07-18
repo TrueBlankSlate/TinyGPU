@@ -103,41 +103,7 @@ Additional modules will be added as development progresses.
 
 ---
 
-# Roadmap
 
-## Phase 1 - Core RTL Modules
-
-- [x] ALU
-- [x] Register File
-- [x] Instruction Decoder
-- [x] Fetch Unit
-- [x] Branch Predictor
-- [ ] Program Counter (Standalone)
-- [ ] Load Store Unit
-- [ ] Control Unit
-
-## Phase 2 - Processing Element
-
-- [ ] Integrate datapath
-- [ ] Execute arithmetic instructions
-- [ ] Memory operations
-
-## Phase 3 - SIMD Execution
-
-- [ ] Multiple Processing Elements
-- [ ] Broadcast instruction execution
-- [ ] Shared memory
-
-## Phase 4 - GPU Control
-
-- [ ] Scheduler
-- [ ] Branch divergence handling
-
-## Phase 5 - System Integration
-
-- [ ] RISC-V Interface
-- [ ] FPGA Deployment
-- [ ] Benchmarking
 
 ---
 
