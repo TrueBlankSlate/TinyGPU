@@ -116,7 +116,7 @@ Planned:
 - RISC-V
 - FPGA
 - Cocotb
-- Verilator
+- Vivado
 
 ---
 
