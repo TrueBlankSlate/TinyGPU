@@ -1,0 +1,7 @@
+in alu we have only 1 working code
+we want 4
+
+for today
+
+focus on making a 4 element vector and add all by 2.
+then when that works make a scheduler on top of it to schedule the same vec add twice.
