@@ -15,10 +15,10 @@ module core(
 
 );
 
-wire [31:0] reg_a;
-wire [31:0] reg_b;
+    wire [31:0] reg_a;
+    wire [31:0] reg_b;
 
-register_file rf(
+    register_file rf(
 
     .clk(clk),
     .rst(rst),
@@ -30,18 +30,18 @@ register_file rf(
     .reg_a(reg_a),
     .reg_b(reg_b)
 
-);
+    );
 
-alu alu_inst(
+    alu alu_inst(
 
     .a(reg_a),
     .b(reg_b),
     .opcode(alu_op),
     .x(result)
 
-);
+    );
 
-always @(posedge clk or posedge rst) begin
+    always @(posedge clk or posedge rst) begin
 
     if(rst)
         idle <= 1'b1;
@@ -49,7 +49,5 @@ always @(posedge clk or posedge rst) begin
         idle <= 1'b0;
     else
         idle <= 1'b1;
-
-end
-
+    end
 endmodule
