@@ -27,8 +27,8 @@ module fetcher(
 
     output reg  [31:0]  out_instr,  //to decoder
     output reg  [4:0]   out_rd_addr, //to decoder
-    output reg out_valid
-    output reg          cache_load, //write enable for vector cache
+    output reg out_valid,
+    output reg cache_load, //write enable for vector cache
     output reg  [127:0] cache_rs1,
     output reg  [127:0] cache_rs2,
 
