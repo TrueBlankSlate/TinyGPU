@@ -3,23 +3,23 @@ module fetcher(
     input  wire         clk,
     input  wire         rst,
 
-    input  wire         fetch_req,
+    input  wire         fetch_req, //from scheduler
     input  wire [4:0]   rs1_addr,
     input  wire [4:0]   rs2_addr,
     input  wire [31:0]  instr,
     input  wire [4:0]   rd_addr,
 
-    output reg  [4:0]   mem_addr_a,
+    output reg  [4:0]   mem_addr_a, //to global memory
     output reg  [4:0]   mem_addr_b,
 
     input  wire [127:0] mem_data_a,
     input  wire [127:0] mem_data_b,
 
-    output reg          cache_load,
+    output reg          cache_load, //write enable for vector cache
     output reg  [127:0] cache_rs1,
     output reg  [127:0] cache_rs2,
 
-    output reg  [31:0]  out_instr,
+    output reg  [31:0]  out_instr, //to decoder
     output reg  [4:0]   out_rd_addr,
     output reg          out_valid
 );
