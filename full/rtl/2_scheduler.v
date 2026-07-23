@@ -6,18 +6,18 @@ module scheduler(
     input  wire dispatch_req,
 
     input  wire [31:0] instr,
-    input  wire [4:0]  vec_rs1_addr, // to cache
-    input  wire [4:0]  vec_rs2_addr, //to cache
-    input  wire [4:0]  vec_rd_addr, //writing to cache? <---------
+    input  wire [4:0]  vec_rs1_addr, // from cache
+    input  wire [4:0]  vec_rs2_addr, //from cache
+    input  wire [4:0]  vec_rd_addr, //writing from cache? 
 
     input  wire [3:0]  cores_idle, //for scheduling 0 = not idle 1 = idle
 
-    output reg fetch_req,
+    output reg fetch_req, //to fetcher 
 
-    output reg [31:0]  out_instr,
-    output reg [4:0]   out_rs1_addr,
-    output reg [4:0]   out_rs2_addr,
-    output reg [4:0]   out_rd_addr
+    output reg [31:0]  out_instr, // to fetcher
+    output reg [4:0]   out_rs1_addr, //
+    output reg [4:0]   out_rs2_addr, // 
+    output reg [4:0]   out_rd_addr //
 
 );
 

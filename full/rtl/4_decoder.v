@@ -1,11 +1,11 @@
 module decoder(
 
-    input  wire         clk,
-    input  wire         rst,
+    input  wire clk,
+    input  wire rst,
 
-    input  wire         valid,
+    input  wire valid,
     input  wire [31:0]  instr, //32 bit instruction
-    input  wire [4:0]   rd_addr,
+    input  wire [4:0] rd_addr,
 
     input  wire [127:0] vec_rs1, //cache
     input  wire [127:0] vec_rs2,
@@ -14,11 +14,11 @@ module decoder(
     output reg [127:0]  lane_b_flat,
     output reg [6:0]    alu_op,
     output reg [4:0]    out_rd_addr,
-    output reg          dispatch
+    output reg dispatch //
 );
 
 wire [6:0] func7  = instr[31:25];
-wire [2:0] func3  = instr[14:12];
+wire [2:0] func3  = instr[14:12]; //do i use this for predictor
 wire [6:0] opcode = instr[6:0];
 
 function [6:0] decode;

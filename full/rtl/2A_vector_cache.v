@@ -1,17 +1,17 @@
 module vector_cache(
 
-    input  wire         clk,
-    input  wire         rst,
+    input  wire clk,
+    input  wire rst,
 
-    input  wire         load,
+    input  wire load, //from fetcher
 
-    input  wire [127:0] in_rs1,
+    input  wire [127:0] in_rs1, //from global mem r_data_a, r_data_b
     input  wire [127:0] in_rs2,
 
-    output reg  [127:0] rs1,
-    output reg  [127:0] rs2,
+    output reg [127:0] rs1,
+    output reg [127:0] rs2,
 
-    output reg          valid
+    output reg valid
 
 );
 
