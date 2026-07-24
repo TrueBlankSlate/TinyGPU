@@ -1,5 +1,5 @@
 module decoder(
-    input clk, rst
+    input clk, rst,
 
     input  [31:0] instruction,
 
