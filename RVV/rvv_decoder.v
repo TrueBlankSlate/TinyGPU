@@ -17,52 +17,29 @@ wire [5:0] func6 = instruction[31:26];
 wire [2:0] func3 = instruction[14:12];
 
 always @(*) begin
-
-    // Default outputs
     instr_id = 6'd0;
-    vm       = 1'b0;
-    vs1      = 5'd0;
-    vs2      = 5'd0;
-    vd       = 5'd0;
+    vm = 1'b0;
+    vs1 = 5'd0;
+    vs2 = 5'd0;
+    vd = 5'd0;
 
-    if (opcode == 7'b1010111) begin //later add for different opcodes too?
-
-        case (func3) 
-            // OPIVV
-            3'b000: begin
+    if (opcode == 7'b1010111) begin
+        case (func3)
+            3'b000, // OPIVV
+            3'b001, // OPFVV
+            3'b010, //OPMVV
+            3'b011, //OPIVI 
+            3'b100 : begin //OPIVX
                 instr_id = func6;
                 vm = instruction[25];
-                vs2 = instruction[24:20];
-                vs1 = instruction[19:15];
-                vd = instruction[11:7];
+                vs2 = instruction[24:20]; 
+                vs1 = instruction[19:15];  //in OPIVI this is imm [4:0] //in OPIVX this is rs1
+                vd = instruction[11:7];  //address in register file.
             end
 
-            // OPFVV
-            3'b001: begin
-                instr_id = func6;
-                vm = instruction[25];
-                vs2 = instruction[24:20];
-                vs1 = instruction[19:15];
-                vd = instruction[11:7];
-            end
+            default: vd = 32'd0;
 
-            // OPIVI
-            3'b011: begin
-                instr_id = func6;
-                vm = instruction[25];
-                vs2 = instruction[24:20];
-                vs1 = instruction[19:15]; // immediate[4:0]
-                vd = instruction[11:7];
-            end
-
-            default: begin
-                instr_id = 6'd0;
-                vm = 1'b0;
-                vs1 = 5'd0;
-                vs2 = 5'd0;
-                vd = 5'd0;
-            end
-        endcase
+        endcase 
     end
 end
 endmodule
