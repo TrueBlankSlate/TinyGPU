@@ -43,12 +43,8 @@ always @(*) begin
         endcase
     end
 
-    // OPFVV
-    3'b001: begin
-        // Floating-point instructions.
-        // Implement later using IEEE-754 FP units.
-        vd = 32'd0;
-    end
+    // OPFVV do later
+    
 
     // OPIVI
     3'b011: begin
