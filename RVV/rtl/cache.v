@@ -16,7 +16,7 @@ module cache(
 
     integer i;
     always @(posedge clk) begin
-        if (rst) begin
+        if (!rst) begin
             for (i = 0; i < 32; i = i+1)
                 vector_cache[i] <= 128'b0;
         end

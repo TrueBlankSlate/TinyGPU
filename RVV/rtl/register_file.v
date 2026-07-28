@@ -11,7 +11,7 @@ module RegisterFile(
 );
 
     always @(posedge clk) begin
-        if (rst) begin
+        if (!rst) begin
             vs1_out <= 32'b0;
             vs2_out <= 32'b0;
         end
