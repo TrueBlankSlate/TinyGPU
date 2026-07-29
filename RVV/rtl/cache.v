@@ -1,11 +1,12 @@
 module cache(
     input clk,
     input rst,
-    input we,
     input [4:0] vs1,  
     input [4:0] vs2,  // which vector register is operand B
-    input [4:0] w_addr,    // which vector register to write to
-    input [127:0] w_data,  // 4 elements x 32 bits to write
+
+    input gw_we,
+    input [4:0] gw_addr,
+    input [127:0] gw_data,
 
     output [31:0] a0, a1, a2, a3,
     output [31:0] b0, b1, b2, b3
@@ -16,12 +17,13 @@ module cache(
 
     integer i;
     always @(posedge clk) begin
-        if (!rst) begin
+        if (rst) begin
             for (i = 0; i < 32; i = i+1)
                 vector_cache[i] <= 128'b0;
         end
-        else if (we) begin
-            vector_cache[w_addr] <= w_data;
+
+        else if (gw_we) begin
+            vector_cache[gw_addr] <= gw_data;
         end
     end
 
