@@ -8,13 +8,14 @@ module decoder(
     output reg vm,
     output reg [4:0] vs1,
     output reg [4:0] vs2,
-    output reg [4:0] vd
+    output reg [4:0] vd,
+    output reg [2:0] func3_out
 );
 
 assign opcode = instruction[6:0];
 
 wire [5:0] func6 = instruction[31:26];
-wire [2:0] func3 = instruction[14:12];
+
 
 always @(*) begin
     instr_id = 6'd0;
@@ -22,9 +23,10 @@ always @(*) begin
     vs1 = 5'd0;
     vs2 = 5'd0;
     vd = 5'd0;
+    func3_out = instruction[14:12];
 
     if (opcode == 7'b1010111) begin
-        case (func3)
+        case (func3_out)
             3'b000, // OPIVV
             3'b001, // OPFVV
             3'b010, //OPMVV
