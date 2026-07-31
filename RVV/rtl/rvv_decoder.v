@@ -9,7 +9,8 @@ module decoder(
     output reg [4:0] vs1,
     output reg [4:0] vs2,
     output reg [4:0] vd,
-    output reg [2:0] func3_out
+    output reg [2:0] func3_out,
+    output reg matmul_out
 );
 
 assign opcode = instruction[6:0];
@@ -24,6 +25,7 @@ always @(*) begin
     vs2 = 5'd0;
     vd = 5'd0;
     func3_out = instruction[14:12];
+    matmul_out = 1'b0;
 
     if (opcode == 7'b1010111) begin
         case (func3_out)
@@ -37,9 +39,12 @@ always @(*) begin
                 vs2 = instruction[24:20]; 
                 vs1 = instruction[19:15];  //in OPIVI this is imm [4:0] //in OPIVX this is rs1
                 vd = instruction[11:7];  //address in register file.
+                if(func6 == 6'b101101 && func3_out == 3'b101) begin //this IP hasnt been updated.
+                    matmul_out = 1'b1;
+                end
             end
 
-            default: vd = 32'd0;
+            default: vd = 5'd0;
 
         endcase 
     end

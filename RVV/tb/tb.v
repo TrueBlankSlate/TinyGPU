@@ -1,66 +1,140 @@
-`timescale 1ps/1ps
+`timescale 1ns/1ps
+
 module tb;
 
-    reg clk, rst, gw_we, we_0;
-    reg [31:0] instruction;
-    reg [4:0]  gw_addr;
-    reg [127:0] gw_data;
-    wire [31:0] vd_0, vd_1, vd_2, vd_3;
+reg clk;
+reg rst_cache;
+reg rst_rf;
 
-    design_1_wrapper dut(
-        .clk_0(clk), .rst_0(rst),
-        .gw_we_0(gw_we), .we_0(we_0),
-        .gw_addr_0(gw_addr), .gw_data_0(gw_data),
-        .instruction_0(instruction),
-        .vd_0(vd_0), .vd_1(vd_1),
-        .vd_2(vd_2), .vd_3(vd_3)
-    );
+reg        gw_we;
+reg [4:0]  gw_addr;
+reg [127:0] gw_data;
 
-    always #5 clk=~clk;
+reg [31:0] instruction;
+reg we;
 
-    initial begin
-        clk=0; rst=1; gw_we=0; we_0=0;
-        instruction=0; gw_addr=0; gw_data=0;
-        #2; rst=0;
-        @(posedge clk); #1;
+wire [31:0] vd0;
+wire [31:0] vd1;
+wire [31:0] vd2;
+wire [31:0] vd3;
 
-        // write A=[1,2,3,4] to cache[1]
-        gw_addr=5'd1; gw_data={32'd4,32'd3,32'd2,32'd1};
-        gw_we=1; @(posedge clk); #1; gw_we=0;
+design_1_wrapper dut(
+    .clk_0(clk),
+    .gw_addr_0(gw_addr),
+    .gw_data_0(gw_data),
+    .gw_we_0(gw_we),
+    .instruction_0(instruction),
+    .rst_0(rst_cache),
+    .rst_1(rst_rf),
+    .vd_0(vd0),
+    .vd_1(vd1),
+    .vd_2(vd2),
+    .vd_3(vd3),
+    .we_0(we)
+);
 
-        // write B=[10,20,30,40] to cache[2]
-        gw_addr=5'd2; gw_data={32'd40,32'd30,32'd20,32'd10};
-        gw_we=1; @(posedge clk); #1; gw_we=0;
+always #5 clk = ~clk;
 
-        // vadd.vv vs1=1,vs2=2,vd=3 → expect [11,22,33,44]
-        instruction = 32'b000000_1_00010_00001_000_00011_1010111;
-        @(posedge clk); #1;
-        we_0=1; @(posedge clk); #1; we_0=0;
-        @(posedge clk); #1;
-        $display("vadd: [%0d,%0d,%0d,%0d]", vd_0,vd_1,vd_2,vd_3);
+task write_vec;
+input [4:0] addr;
+input [31:0] e0,e1,e2,e3;
+begin
+    @(posedge clk);
+    gw_we   <= 1;
+    gw_addr <= addr;
+    gw_data <= {e3,e2,e1,e0};
+    @(posedge clk);
+    gw_we <= 0;
+end
+endtask
 
-        // vsub.vv → expect [9,18,27,36]
-        instruction = 32'b000010_1_00010_00001_000_00011_1010111;
-        @(posedge clk); #1;
-        we_0=1; @(posedge clk); #1; we_0=0;
-        @(posedge clk); #1;
-        $display("vsub: [%0d,%0d,%0d,%0d]", vd_0,vd_1,vd_2,vd_3);
+task run_instr;
+input [5:0] func6;
+input [2:0] func3;
+input [4:0] vs2;
+input [4:0] vs1;
+input [4:0] vd;
+begin
+    instruction = {func6,1'b0,vs2,vs1,func3,vd,7'b1010111};
 
-        // vmul.vv → expect [10,40,90,160]
-        instruction = 32'b100101_1_00010_00001_000_00011_1010111;
-        @(posedge clk); #1;
-        we_0=1; @(posedge clk); #1; we_0=0;
-        @(posedge clk); #1;
-        $display("vmul: [%0d,%0d,%0d,%0d]", vd_0,vd_1,vd_2,vd_3);
+    we = 1;
+    @(posedge clk);
+    we = 0;
 
-        // vmulh.vv → expect [0,0,0,0]
-        instruction = 32'b100111_1_00010_00001_000_00011_1010111;
-        @(posedge clk); #1;
-        we_0=1; @(posedge clk); #1; we_0=0;
-        @(posedge clk); #1;
-        $display("vmulh: [%0d,%0d,%0d,%0d]", vd_0,vd_1,vd_2,vd_3);
+    repeat(2) @(posedge clk);
 
-        #10 $finish;
-    end
+    $display("--------------------------------");
+    $display("time = %0t",$time);
+    $display("instruction = %h",instruction);
+    $display("vd0 = %0d",vd0);
+    $display("vd1 = %0d",vd1);
+    $display("vd2 = %0d",vd2);
+    $display("vd3 = %0d",vd3);
+end
+endtask
+
+initial begin
+
+    clk = 0;
+    rst_cache = 1;
+    rst_rf = 1;
+
+    gw_we = 0;
+    gw_addr = 0;
+    gw_data = 0;
+
+    instruction = 0;
+    we = 0;
+
+    repeat(2) @(posedge clk);
+
+    rst_cache = 0;
+
+    write_vec(5'd1,32'd1,32'd2,32'd3,32'd4);
+    write_vec(5'd2,32'd10,32'd20,32'd30,32'd40);
+
+    rst_rf = 0;
+
+    $display("\n===== VADD.VV =====");
+    run_instr(6'b000000,3'b000,5'd2,5'd1,5'd0);
+
+    $display("Expected:");
+    $display("11 22 33 44");
+
+    $display("\n===== VSUB.VV =====");
+    run_instr(6'b000010,3'b000,5'd2,5'd1,5'd0);
+
+    $display("Expected:");
+    $display("9 18 27 36");
+
+    $display("\n===== VMUL.VV =====");
+    run_instr(6'b100101,3'b000,5'd2,5'd1,5'd0);
+
+    $display("Expected:");
+    $display("10 40 90 160");
+
+    write_vec(5'd3,32'd1,32'd2,32'd3,32'd4);
+    write_vec(5'd4,32'd5,32'd6,32'd7,32'd8);
+
+    $display("\n===== VMACC.VV =====");
+    run_instr(6'b101101,3'b010,5'd4,5'd3,5'd0);
+    
+    $display("matmul = %b", dut.design_1_i.decoder_0_matmul_out);
+    $display("opcode=%b func3=%b func6=%b matmul=%b",
+    dut.design_1_i.decoder_0.opcode,
+    dut.design_1_i.decoder_0.func3_out,
+    dut.design_1_i.decoder_0.instr_id,
+    dut.design_1_i.decoder_0.matmul_out);
+
+    $display("Expected:");
+    $display("vd0 = 19");
+    $display("vd1 = 22");
+    $display("vd2 = 43");
+    $display("vd3 = 50");
+
+    #50;
+    $finish;
+
+end
 
 endmodule
