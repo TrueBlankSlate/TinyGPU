@@ -63,22 +63,25 @@ These modules are currently being integrated into a Processing Element.
 Each Processing Element is expected to contain the following modules:
 
 ```
-            Processing Element
-
        ┌──────────────────────────┐
-       │ Program Counter          │
-       ├──────────────────────────┤
-       │ Instruction Fetch        │
-       ├──────────────────────────┤
        │ Instruction Decoder      │
        ├──────────────────────────┤
-       │ Register File            │
+       │ Vector Cache             │
        ├──────────────────────────┤
-       │ Arithmetic Logic Unit    │
+       │ Register File Array      │
+       │   ├─ Register File 0     │
+       │   ├─ Register File 1     │
+       │   ├─ Register File 2     │
+       │   └─ Register File 3     │
        ├──────────────────────────┤
-       │ Load Store Unit          │
+       │ Parallel ALU Array       │
+       │   ├─ ALU 0               │
+       │   ├─ ALU 1               │
+       │   ├─ ALU 2               │
+       │   └─ ALU 3               │
        ├──────────────────────────┤
-       │ Control Logic            │
+       │ Vector Output            │
+       │   vd_0 ─ vd_3            │
        └──────────────────────────┘
 ```
 
@@ -87,17 +90,21 @@ Some of these modules are still under development.
 ---
 
 # Repository Structure
-
-```
 TinyGPU/
-
-├── alu.v
-├── decoder.v
-├── fetcher.v
-├── predictor.v
-├── register_file.v
+├── rtl/
+│   ├── main/
+│   │   ├── ALU.v
+│   │   ├── cache.v
+│   │   ├── design_1.v
+│   │   ├── design_1_wrapper.v
+│   │   ├── register_file (3).v
+│   │   ├── rvv_decoder.v
+│   │   └── writeback.v
+│   │
+│   ├── Instruction_fetcher.v
+│   └── pc.v
+│
 └── README.md
-```
 
 Additional modules will be added as development progresses.
 
