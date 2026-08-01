@@ -29,7 +29,7 @@ always @(*) begin
     // OPIVV
     3'b000: begin
         case(instr_id)
-            6'h00: vd = s_b1 + s_a1; //vadd.vv
+            6'b000000: vd = s_b1 + s_a1; //vadd.vv
             6'h02: vd = s_b1 - s_a1; //vsub.vv
             6'h25: vd = sp1[31:0]; //vmul.vv
             6'h27: vd = sp1[63:32];//vmulh.vv

@@ -39,7 +39,7 @@ always @(*) begin
                 vs2 = instruction[24:20]; 
                 vs1 = instruction[19:15];  //in OPIVI this is imm [4:0] //in OPIVX this is rs1
                 vd = instruction[11:7];  //address in register file.
-                if(func6 == 6'b101101 && func3_out == 3'b101) begin //this IP hasnt been updated.
+                if(func6 == 6'b101101 && func3_out == 3'b010) begin //this IP hasnt been updated.
                     matmul_out = 1'b1;
                 end
             end
