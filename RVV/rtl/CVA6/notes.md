@@ -35,3 +35,4 @@ the sturct looks like this:
 } accelerator_req_t;
 */
 
+<mark> RVV compiler support has been developed primarily for RV64 targets. </mark>
