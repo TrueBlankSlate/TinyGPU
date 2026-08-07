@@ -3,34 +3,35 @@
 module top(
 
     //==========================
-    // Clock & Reset
+    // FPGA Inputs
     //==========================
-    input wire clk,
-    input wire rst,
-    input wire acc_rst,
+    input  wire clk,
+    input  wire rst,
 
     //==========================
-    // Control Signals
-    //==========================
-    input wire we,
-    input wire [2:0] func3,
-    input wire [5:0] instr_id,
-
-    //==========================
-    // Matrix Inputs
-    //==========================
-    input wire [255:0] mat_a,
-    input wire [255:0] mat_b,
-
-    //==========================
-    // LED Outputs
+    // FPGA Outputs
     //==========================
     output wire [3:0] led
 
 );
 
     //==========================================================
-    // Internal Wires
+    // Internal Control Signals
+    //==========================================================
+
+    wire        we;
+    wire [2:0]  func3;
+    wire [5:0]  instr_id;
+
+    wire [255:0] mat_a;
+    wire [255:0] mat_b;
+
+    // Accumulator reset (kept low)
+    wire acc_rst;
+    assign acc_rst = 1'b0;
+
+    //==========================================================
+    // Internal Data Wires
     //==========================================================
 
     // Cache -> Register Files
@@ -47,16 +48,31 @@ module top(
     wire [63:0] vd0, vd1, vd2, vd3;
 
     //==========================================================
+    // Test Generator
+    //==========================================================
+
+    test_verified TEST(
+
+        .mat_a(mat_a),
+        .mat_b(mat_b),
+        .we(we),
+        .instr_id(instr_id),
+        .func3(func3)
+
+    );
+
+    //==========================================================
     // Cache
     //==========================================================
 
-    cache CACHE(
+    cache_64 CACHE(
 
         .clk(clk),
         .rst(rst),
 
         .func3(func3),
         .instr_id(instr_id),
+
         .mat_a(mat_a),
         .mat_b(mat_b),
 
@@ -71,131 +87,102 @@ module top(
         .b1(b1),
         .b2(b2),
         .b3(b3)
+
     );
 
     //==========================================================
     // Register Files
     //==========================================================
 
-    RegisterFile RF0(
-
+    Registerfile_64 RF0(
         .clk(clk),
         .rst(rst),
         .we(we),
-
         .vs1_in(a0),
         .vs2_in(b0),
-
         .vs1_out(vs1_0),
         .vs2_out(vs2_0)
     );
 
-    RegisterFile RF1(
-
+    Registerfile_64 RF1(
         .clk(clk),
         .rst(rst),
         .we(we),
-
         .vs1_in(a1),
         .vs2_in(b1),
-
         .vs1_out(vs1_1),
         .vs2_out(vs2_1)
     );
 
-    RegisterFile RF2(
-
+    Registerfile_64 RF2(
         .clk(clk),
         .rst(rst),
         .we(we),
-
         .vs1_in(a2),
         .vs2_in(b2),
-
         .vs1_out(vs1_2),
         .vs2_out(vs2_2)
     );
 
-    RegisterFile RF3(
-
+    Registerfile_64 RF3(
         .clk(clk),
         .rst(rst),
         .we(we),
-
         .vs1_in(a3),
         .vs2_in(b3),
-
         .vs1_out(vs1_3),
         .vs2_out(vs2_3)
     );
 
-    
+    //==========================================================
+    // ALUs
+    //==========================================================
 
-    ALU ALU0(
-
+    alu_64 ALU0(
         .clk(clk),
         .rst(rst),
         .acc_rst(acc_rst),
-
         .func3(func3),
         .instr_id(instr_id),
-
         .we(we),
-
         .vs1(vs1_0),
         .vs2(vs2_0),
-
         .vd(vd0)
     );
 
-    ALU ALU1(
-
+    alu_64 ALU1(
         .clk(clk),
         .rst(rst),
         .acc_rst(acc_rst),
-
         .func3(func3),
         .instr_id(instr_id),
-
         .we(we),
-
         .vs1(vs1_1),
         .vs2(vs2_1),
-
         .vd(vd1)
     );
 
-    ALU ALU2(
-
+    alu_64 ALU2(
         .clk(clk),
         .rst(rst),
         .acc_rst(acc_rst),
-
         .func3(func3),
         .instr_id(instr_id),
-
         .we(we),
-
         .vs1(vs1_2),
         .vs2(vs2_2),
-
         .vd(vd2)
     );
 
-    ALU ALU3(
-
+    alu_64 ALU3(
         .clk(clk),
         .rst(rst),
         .acc_rst(acc_rst),
-
         .func3(func3),
         .instr_id(instr_id),
-
         .we(we),
-
         .vs1(vs1_3),
         .vs2(vs2_3),
-
         .vd(vd3)
     );
 
@@ -203,7 +190,7 @@ module top(
     // Writeback
     //==========================================================
 
-    writeback WB(
+    write_back_cheat WB(
 
         .clk(clk),
         .rst(rst),
@@ -214,6 +201,7 @@ module top(
         .v3(vd3),
 
         .led(led)
+
     );
 
 endmodule
