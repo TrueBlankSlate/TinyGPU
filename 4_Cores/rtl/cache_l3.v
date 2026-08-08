@@ -1,53 +1,69 @@
-module L3_cache(
-    input wire clk,
-    input wire rst,
+module l3_cache(
+    input clk,
+    input rst,
+    input we,
 
-    input wire [4:0] vs1,
-    input wire [4:0] vs2,
-    input wire [2:0] func3,
-    input wire [5:0] instr_id,
-    input wire we,
+    input [4:0] vs1,
+    input [4:0] vs2,
 
-    input wire gw_we,
-    input wire [4:0] gw_addr,
-    input wire [511:0] gw_data,
+    input [511:0] w_data,
 
-    output wire [127:0] a0,
-    output wire [127:0] a1,
-    output wire [127:0] a2,
-    output wire [127:0] a3,
+    input [1:0] pass,
+    input func3,
+    input [5:0] instr_id,
 
-    output wire [127:0] b0,
-    output wire [127:0] b1,
-    output wire [127:0] b2,
-    output wire [127:0] b3
+    output reg [127:0] core0_a,
+    output reg [127:0] core0_b,
+    output reg [127:0] core1_a,
+    output reg [127:0] core1_b,
+    output reg [127:0] core2_a,
+    output reg [127:0] core2_b,
+    output reg [127:0] core3_a,
+    output reg [127:0] core3_b
 );
 
-reg [511:0] vector_cache [0:31];
+reg [127:0] mat_mem [0:31];
+reg write_sel;
 
 integer i;
 
 always @(posedge clk) begin
-    if(rst) begin
-        for(i = 0; i < 32; i = i + 1)
-            vector_cache[i] <= 512'd0;
+    if (rst) begin
+        write_sel <= 1'b0;
+
+        for (i = 0; i < 32; i = i + 1)
+            mat_mem[i] <= 128'd0;
     end
-    else begin
-        if(gw_we)
-            vector_cache[gw_addr] <= gw_data;
+    else if (we) begin
+        if (!write_sel) begin
+            mat_mem[vs1 + 0] <= w_data[127:0];
+            mat_mem[vs1 + 1] <= w_data[255:128];
+            mat_mem[vs1 + 2] <= w_data[383:256];
+            mat_mem[vs1 + 3] <= w_data[511:384];
+        end
+        else begin
+            mat_mem[vs2 + 0] <= w_data[127:0];
+            mat_mem[vs2 + 1] <= w_data[255:128];
+            mat_mem[vs2 + 2] <= w_data[383:256];
+            mat_mem[vs2 + 3] <= w_data[511:384];
+        end
+
+        write_sel <= ~write_sel;
     end
 end
 
-// VS1 distribution
-assign a0 = vector_cache[vs1][127:0];
-assign a1 = vector_cache[vs1][255:128];
-assign a2 = vector_cache[vs1][383:256];
-assign a3 = vector_cache[vs1][511:384];
+always @(*) begin
+    core0_a = mat_mem[vs1 + 0];
+    core0_b = mat_mem[vs2 + 0];
 
-// VS2 distribution
-assign b0 = vector_cache[vs2][127:0];
-assign b1 = vector_cache[vs2][255:128];
-assign b2 = vector_cache[vs2][383:256];
-assign b3 = vector_cache[vs2][511:384];
+    core1_a = mat_mem[vs1 + 1];
+    core1_b = mat_mem[vs2 + 1];
+
+    core2_a = mat_mem[vs1 + 2];
+    core2_b = mat_mem[vs2 + 2];
+
+    core3_a = mat_mem[vs1 + 3];
+    core3_b = mat_mem[vs2 + 3];
+end
 
 endmodule
