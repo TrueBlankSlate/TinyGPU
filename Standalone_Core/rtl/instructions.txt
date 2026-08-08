@@ -1,0 +1,3 @@
+This project is in temp so the files are written as temp_1.v and temp_1_wrapper.v
+It is separate from Core/ folder in this branch because when using 4 cores the cache logic changes
+I mean we are not using vs1 and vs2 in 4 cores for the alu private cache and storing it in pos0 and pos1.
