@@ -12,7 +12,7 @@ module ALU(
 wire signed [63:0] s_vs1 = vs1;
 wire signed [63:0] s_vs2 = vs2;
 wire signed [127:0] signed_prod = s_vs1 * s_vs2;
-wire [127:0] unsigned_prod = vs1 * vs2;
+wire [63:0] unsigned_prod = vs1 * vs2;
 
 reg [63:0] acc;
 
@@ -27,21 +27,21 @@ always @(*) begin
     vd = 64'd0;
     case(func3)
     3'b000: begin
-        case(instr_id) //OPIVV
-            6'h00: vd = s_vs1 + s_vs2; //add
-            6'h02: vd = s_vs2 - s_vs1; //sub
-            6'h25: vd = signed_prod[63:0]; //vmul.vv
-            6'h27: vd = signed_prod[127:64]; //vmulh.vv
-            6'h29: vd = unsigned_prod[127:64]; //vmulu.vv
-            6'h21: vd = (s_vs1!=0) ? (s_vs2/s_vs1) : 64'd0; //vdiv.vv
-            6'h23: vd = s_vs2 % s_vs1; //remainder
-            6'h09: vd = vs2 & vs1; //and
-            6'h0A: vd = vs2 | vs1; //or
-            6'h0B: vd = vs2 ^ vs1; //xor
-            6'h04: vd = vs2 << vs1[4:0]; //rsb
-            6'h05: vd = vs2 >> vs1[4:0]; //lsb
-            6'h07: vd = s_vs2 >>> vs1[4:0]; //arlsb
-            default: vd = 64'd0; //default
+        case(instr_id)
+            6'h00: vd = s_vs1 + s_vs2;
+            6'h02: vd = s_vs2 - s_vs1;
+            6'h25: vd = signed_prod[63:0];
+            6'h27: vd = signed_prod[127:64];
+            6'h29: vd = unsigned_prod[127:64];
+            6'h21: vd = (s_vs1!=0) ? (s_vs2/s_vs1) : 64'd0;
+            6'h23: vd = s_vs2 % s_vs1;
+            6'h09: vd = vs2 & vs1;
+            6'h0A: vd = vs2 | vs1;
+            6'h0B: vd = vs2 ^ vs1;
+            6'h04: vd = vs2 << vs1[4:0];
+            6'h05: vd = vs2 >> vs1[4:0];
+            6'h07: vd = s_vs2 >>> vs1[4:0];
+            default: vd = 64'd0;
         endcase
     end
     3'b010: begin
@@ -50,7 +50,7 @@ always @(*) begin
             default: vd = 64'd0;
         endcase
     end
-    3'b011: begin //OPMVV
+    3'b011: begin
         case(instr_id)
             6'h00: vd = s_vs2 + s_vs1;
             6'h09: vd = vs2 & vs1;
