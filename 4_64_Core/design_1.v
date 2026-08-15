@@ -18,6 +18,7 @@ module design_1
     instr_id_0,
     mat_a_0,
     mat_b_0,
+    pass_0,
     rst_0,
     vd_0,
     vd_1,
@@ -30,6 +31,7 @@ module design_1
   input [5:0]instr_id_0;
   input [255:0]mat_a_0;
   input [255:0]mat_b_0;
+  input [1:0]pass_0;
   (* X_INTERFACE_INFO = "xilinx.com:signal:reset:1.0 RST.RST_0 RST" *) (* X_INTERFACE_PARAMETER = "XIL_INTERFACENAME RST.RST_0, INSERT_VIP 0, POLARITY ACTIVE_HIGH" *) input rst_0;
   output [63:0]vd_0;
   output [63:0]vd_1;
@@ -59,6 +61,7 @@ module design_1
   wire [5:0]instr_id_0;
   wire [255:0]mat_a_0;
   wire [255:0]mat_b_0;
+  wire [1:0]pass_0;
   wire rst_0;
   wire [63:0]vd_0;
   wire [63:0]vd_1;
@@ -66,13 +69,47 @@ module design_1
   wire [63:0]vd_3;
   wire we_0;
 
+  // Raw per-ALU products (element-wise A[pass][k] * B[k][core]).
+  wire [63:0] alu_vd_0, alu_vd_1, alu_vd_2, alu_vd_3;
+
+  // matmul (vmacc): the 4 ALUs' products for this pass are one dot-product
+  // term each; sum them into this pass's output element, then latch that
+  // into dot_reg[pass] once the operands have actually propagated through
+  // (RegisterFile + ALU take 1 cycle after we_0, hence the _d1 delay below).
+  wire is_vmacc = (instr_id_0 == 6'h2D) && (func3_0 == 3'b010);
+  wire [63:0] dot_sum = alu_vd_0 + alu_vd_1 + alu_vd_2 + alu_vd_3;
+
+  reg          we_0_d1;
+  reg  [1:0]   pass_0_d1;
+  reg  [63:0]  dot_reg [0:3];
+  integer      dr_i;
+
+  always @(posedge clk_0) begin
+    if (rst_0) begin
+      we_0_d1   <= 1'b0;
+      pass_0_d1 <= 2'd0;
+      for (dr_i = 0; dr_i < 4; dr_i = dr_i + 1)
+        dot_reg[dr_i] <= 64'd0;
+    end else begin
+      we_0_d1   <= we_0;
+      pass_0_d1 <= pass_0;
+      if (we_0_d1)
+        dot_reg[pass_0_d1] <= dot_sum;
+    end
+  end
+
+  assign vd_0 = is_vmacc ? dot_reg[0] : alu_vd_0;
+  assign vd_1 = is_vmacc ? dot_reg[1] : alu_vd_1;
+  assign vd_2 = is_vmacc ? dot_reg[2] : alu_vd_2;
+  assign vd_3 = is_vmacc ? dot_reg[3] : alu_vd_3;
+
   ALU ALU_0
        (.acc_rst(acc_rst_0),
         .clk(clk_0),
         .func3(func3_0),
         .instr_id(instr_id_0),
         .rst(rst_0),
-        .vd(vd_0),
+        .vd(alu_vd_0),
         .vs1(RegisterFile_0_vs1_out),
         .vs2(RegisterFile_0_vs2_out),
         .we(we_0));
@@ -82,7 +119,7 @@ module design_1
         .func3(func3_0),
         .instr_id(instr_id_0),
         .rst(rst_0),
-        .vd(vd_1),
+        .vd(alu_vd_1),
         .vs1(RegisterFile_1_vs1_out),
         .vs2(RegisterFile_1_vs2_out),
         .we(we_0));
@@ -92,7 +129,7 @@ module design_1
         .func3(func3_0),
         .instr_id(instr_id_0),
         .rst(rst_0),
-        .vd(vd_2),
+        .vd(alu_vd_2),
         .vs1(RegisterFile_2_vs1_out),
         .vs2(RegisterFile_2_vs2_out),
         .we(we_0));
@@ -102,7 +139,7 @@ module design_1
         .func3(func3_0),
         .instr_id(instr_id_0),
         .rst(rst_0),
-        .vd(vd_3),
+        .vd(alu_vd_3),
         .vs1(RegisterFile_3_vs1_out),
         .vs2(RegisterFile_3_vs2_out),
         .we(we_0));

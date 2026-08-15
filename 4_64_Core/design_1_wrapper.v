@@ -17,6 +17,7 @@ module design_1_wrapper
     instr_id_0,
     mat_a_0,
     mat_b_0,
+    pass_0,
     rst_0,
     vd_0,
     vd_1,
@@ -29,6 +30,7 @@ module design_1_wrapper
   input [5:0]instr_id_0;
   input [255:0]mat_a_0;
   input [255:0]mat_b_0;
+  input [1:0]pass_0;
   input rst_0;
   output [63:0]vd_0;
   output [63:0]vd_1;
@@ -42,6 +44,7 @@ module design_1_wrapper
   wire [5:0]instr_id_0;
   wire [255:0]mat_a_0;
   wire [255:0]mat_b_0;
+  wire [1:0]pass_0;
   wire rst_0;
   wire [63:0]vd_0;
   wire [63:0]vd_1;
@@ -56,6 +59,7 @@ module design_1_wrapper
         .instr_id_0(instr_id_0),
         .mat_a_0(mat_a_0),
         .mat_b_0(mat_b_0),
+        .pass_0(pass_0),
         .rst_0(rst_0),
         .vd_0(vd_0),
         .vd_1(vd_1),

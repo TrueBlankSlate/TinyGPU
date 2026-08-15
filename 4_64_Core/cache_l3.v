@@ -46,17 +46,34 @@ always @(posedge clk) begin
     end
 end
 
+// vmacc (4x4 matmul): broadcast row `pass` of A to every core, and give
+// each core a fixed column of B (transpose-read from row-major storage)
+// held constant for the whole instruction.
+wire is_vmacc = (func3 == 3'b010) && (instr_id == 6'h2D);
+
 always @(*) begin
-    // Existing SIMD primitives consume their current 128-bit quadrants.
-    // The full 1024-bit matrices remain resident for future wider cores.
-    core0_a = mat_mem[vs1][255:0];
-    core0_b = mat_mem[vs2][255:0];
-    core1_a = mat_mem[vs1][511:256];
-    core1_b = mat_mem[vs2][511:256];
-    core2_a = mat_mem[vs1][767:512];
-    core2_b = mat_mem[vs2][767:512];
-    core3_a = mat_mem[vs1][1023:768];
-    core3_b = mat_mem[vs2][1023:768];
+    if (is_vmacc) begin
+        core0_a = mat_mem[vs1][pass*256 +: 256];
+        core1_a = mat_mem[vs1][pass*256 +: 256];
+        core2_a = mat_mem[vs1][pass*256 +: 256];
+        core3_a = mat_mem[vs1][pass*256 +: 256];
+
+        // column N = words {N, N+4, N+8, N+12} of mat_mem[vs2]
+        core0_b = { mat_mem[vs2][12*64 +: 64], mat_mem[vs2][8*64 +: 64], mat_mem[vs2][4*64 +: 64], mat_mem[vs2][0*64 +: 64] };
+        core1_b = { mat_mem[vs2][13*64 +: 64], mat_mem[vs2][9*64 +: 64], mat_mem[vs2][5*64 +: 64], mat_mem[vs2][1*64 +: 64] };
+        core2_b = { mat_mem[vs2][14*64 +: 64], mat_mem[vs2][10*64 +: 64], mat_mem[vs2][6*64 +: 64], mat_mem[vs2][2*64 +: 64] };
+        core3_b = { mat_mem[vs2][15*64 +: 64], mat_mem[vs2][11*64 +: 64], mat_mem[vs2][7*64 +: 64], mat_mem[vs2][3*64 +: 64] };
+    end else begin
+        // Existing SIMD primitives consume their current 128-bit quadrants.
+        core0_a = mat_mem[vs1][255:0];
+        core0_b = mat_mem[vs2][255:0];
+        core1_a = mat_mem[vs1][511:256];
+        core1_b = mat_mem[vs2][511:256];
+        core2_a = mat_mem[vs1][767:512];
+        core2_b = mat_mem[vs2][767:512];
+        core3_a = mat_mem[vs1][1023:768];
+        core3_b = mat_mem[vs2][1023:768];
+    end
 end
 
 endmodule

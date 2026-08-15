@@ -46,7 +46,10 @@ always @(*) begin
     end
     3'b010: begin
         case(instr_id)
-            6'h2D: vd = acc; // show result combinationally
+            // matmul: plain per-element product; the cross-ALU sum that
+            // turns 4 products into one dot-product term now happens in
+            // design_1.v, not here (acc/acc_rst below are unused for vmacc).
+            6'h2D: vd = signed_prod[63:0];
             default: vd = 64'd0;
         endcase
     end

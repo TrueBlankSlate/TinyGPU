@@ -71,9 +71,14 @@ reg [31:0] instr_q; //queue
 reg [2:0]  beat_q;       // 0..7
 reg        ar_sent_q;
 
-// vmacc pass tracking (2 passes: pass 0 and pass 1)
+// vmacc pass tracking (4 passes: pass 0..3, one output row per pass)
 reg [1:0]  pass_q;
 reg        pass_done;
+// cache.v re-registers mat_a/mat_b on top of RegisterFile's own capture
+// register, so a new `pass_0` needs one full settle cycle before we_0
+// can safely strobe RegisterFile with that pass's row. phase=0: advance
+// pass_0 and wait; phase=1: row is settled, fire we_0 for it.
+reg        phase;
 
 assign issue_ready  = (state == IDLE);
 assign issue_accept = (state == IDLE) && issue_valid && is_mine;
@@ -98,6 +103,7 @@ always @(posedge clk) begin
         pass_0      <= 2'd0;
         pass_q      <= 2'd0;
         pass_done   <= 1'b0;
+        phase       <= 1'b0;
         acc_rst_out <= 1'b0;
         result_valid<= 1'b0;
         instruction_0 <= 32'd0;
@@ -114,7 +120,8 @@ always @(posedge clk) begin
                 ar_sent_q    <= 1'b0;
                 pass_q       <= 2'd0;
                 pass_0       <= 2'd0;
-                pass_done    <= 1'b0;                
+                pass_done    <= 1'b0;
+                phase        <= 1'b0;
 
                 // when the issue is accepted
                 if (issue_accept) begin
@@ -190,15 +197,31 @@ always @(posedge clk) begin
                 // Then signal result
                 if (!result_valid) begin
                     if (is_vmacc_q && !pass_done) begin
-                        // vmacc needs 2 passes
-                        if (pass_q == 2'd1) begin
-                            pass_done   <= 1'b1;
-                            acc_rst_out <= 1'b1; // reset acc for next vmacc op
-                            result_valid <= 1'b1;
-                        end else begin
+                        // vmacc (4x4 matmul) needs 4 passes: pass i broadcasts
+                        // row i of A to every core, which already holds a
+                        // fixed column of B, producing that pass's output row.
+                        // pass 0 was already fired by WAIT_COMMIT's we_0 pulse
+                        // (its row was settled during the whole WAIT_COMMIT
+                        // dwell, so no extra settle cycle was needed there).
+                        if (!phase) begin
+                            // advance to the next pass and let cache.v's
+                            // registered mat_a/mat_b catch up for one cycle
                             pass_q <= pass_q + 2'd1;
                             pass_0 <= pass_q + 2'd1;
-                            we_0   <= 1'b1;      // re-trigger for next pass
+                            phase  <= 1'b1;
+                        end else begin
+                            // row is settled now; fire we_0 to capture it
+                            we_0  <= 1'b1;
+                            phase <= 1'b0;
+                            if (pass_q == 2'd3) begin
+                                pass_done   <= 1'b1;
+                                acc_rst_out <= 1'b1; // reset acc for next vmacc op
+                                // result_valid deliberately not set here --
+                                // this we_0 pulse's dot_reg[3] capture lands
+                                // one cycle later; the (!pass_done) check
+                                // failing next cycle falls through to the
+                                // else branch below, giving that cycle to land.
+                            end
                         end
                     end else begin
                         result_valid <= 1'b1;
