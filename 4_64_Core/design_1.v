@@ -66,7 +66,7 @@ module design_1
   wire [63:0]vd_3;
   wire we_0;
 
-  design_1_ALU_0_0 ALU_0
+  ALU ALU_0
        (.acc_rst(acc_rst_0),
         .clk(clk_0),
         .func3(func3_0),
@@ -76,7 +76,7 @@ module design_1
         .vs1(RegisterFile_0_vs1_out),
         .vs2(RegisterFile_0_vs2_out),
         .we(we_0));
-  design_1_ALU_1_0 ALU_1
+  ALU ALU_1
        (.acc_rst(acc_rst_0),
         .clk(clk_0),
         .func3(func3_0),
@@ -86,7 +86,7 @@ module design_1
         .vs1(RegisterFile_1_vs1_out),
         .vs2(RegisterFile_1_vs2_out),
         .we(we_0));
-  design_1_ALU_2_0 ALU_2
+  ALU ALU_2
        (.acc_rst(acc_rst_0),
         .clk(clk_0),
         .func3(func3_0),
@@ -96,7 +96,7 @@ module design_1
         .vs1(RegisterFile_2_vs1_out),
         .vs2(RegisterFile_2_vs2_out),
         .we(we_0));
-  design_1_ALU_3_0 ALU_3
+  ALU ALU_3
        (.acc_rst(acc_rst_0),
         .clk(clk_0),
         .func3(func3_0),
@@ -106,7 +106,7 @@ module design_1
         .vs1(RegisterFile_3_vs1_out),
         .vs2(RegisterFile_3_vs2_out),
         .we(we_0));
-  design_1_RegisterFile_0_0 RegisterFile_0
+  RegisterFile RegisterFile_0
        (.clk(clk_0),
         .rst(rst_0),
         .vs1_in(cache_0_a0),
@@ -114,7 +114,7 @@ module design_1
         .vs2_in(cache_0_b0),
         .vs2_out(RegisterFile_0_vs2_out),
         .we(we_0));
-  design_1_RegisterFile_1_0 RegisterFile_1
+  RegisterFile RegisterFile_1
        (.clk(clk_0),
         .rst(rst_0),
         .vs1_in(cache_0_a1),
@@ -122,7 +122,7 @@ module design_1
         .vs2_in(cache_0_b1),
         .vs2_out(RegisterFile_1_vs2_out),
         .we(we_0));
-  design_1_RegisterFile_2_0 RegisterFile_2
+  RegisterFile RegisterFile_2
        (.clk(clk_0),
         .rst(rst_0),
         .vs1_in(cache_0_a2),
@@ -130,7 +130,7 @@ module design_1
         .vs2_in(cache_0_b2),
         .vs2_out(RegisterFile_2_vs2_out),
         .we(we_0));
-  design_1_RegisterFile_3_0 RegisterFile_3
+  RegisterFile RegisterFile_3
        (.clk(clk_0),
         .rst(rst_0),
         .vs1_in(cache_0_a3),
@@ -138,7 +138,7 @@ module design_1
         .vs2_in(cache_0_b3),
         .vs2_out(RegisterFile_3_vs2_out),
         .we(we_0));
-  design_1_cache_0_0 cache_0
+  cache cache_0
        (.a0(cache_0_a0),
         .a1(cache_0_a1),
         .a2(cache_0_a2),

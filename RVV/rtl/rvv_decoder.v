@@ -1,4 +1,4 @@
-module decoder(
+module tinygpu_decoder(
     input clk, rst,
     input  [31:0] instruction,
     output [6:0] opcode,

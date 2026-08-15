@@ -1,4 +1,4 @@
-module decoder(
+module tinygpu_decoder(
     input clk, rst,
     input  [31:0] instruction,
     output [6:0] opcode,
@@ -32,6 +32,12 @@ always @(*) begin
             end
             default: vd = 5'd0;
         endcase
+    end else if (opcode == 7'b0000111) begin
+        // vle64.v: custom two-destination bulk load, reuses the same
+        // vs2/vs1 field positions as OP-V so one AXI fetch fills two
+        // L3 cache lines (mat A and mat B) at once.
+        vs2 = instruction[24:20];
+        vs1 = instruction[19:15];
     end
 end
 endmodule

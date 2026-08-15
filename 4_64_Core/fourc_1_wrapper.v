@@ -2,7 +2,7 @@
 //Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 //--------------------------------------------------------------------------------
 //Tool Version: Vivado v.2025.2 (win64) Build 6299465 Fri Nov 14 19:35:11 GMT 2025
-//Date        : Thu Aug 13 16:64:39 2026
+//Date        : Fri Aug 14 15:27:17 2026
 //Host        : AthOS-II running 64-bit major release  (build 9200)
 //Command     : generate_target fourc_1_wrapper.bd
 //Design      : fourc_1_wrapper
@@ -34,7 +34,8 @@ module fourc_1_wrapper
     vd_3_3,
     w_data_0,
     we_0,
-    we_1);
+    we_1,
+    l3_ready);
   input acc_rst_0_0;
   input clk_0;
   input [31:0]instruction_0;
@@ -59,6 +60,7 @@ module fourc_1_wrapper
   input [2047:0]w_data_0;
   input we_0;
   input we_1;
+  output l3_ready;
 
   wire acc_rst_0_0;
   wire clk_0;
@@ -84,6 +86,7 @@ module fourc_1_wrapper
   wire [2047:0]w_data_0;
   wire we_0;
   wire we_1;
+  wire l3_ready;
 
   fourc_1 fourc_1_i
        (.acc_rst_0_0(acc_rst_0_0),
@@ -91,6 +94,7 @@ module fourc_1_wrapper
         .instruction_0(instruction_0),
         .pass_0(pass_0),
         .rst_0(rst_0),
+        .l3_ready(l3_ready),
         .vd_0_0(vd_0_0),
         .vd_0_1(vd_0_1),
         .vd_0_2(vd_0_2),

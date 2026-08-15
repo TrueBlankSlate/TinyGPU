@@ -1,0 +1,115 @@
+`timescale 1ns / 1ps
+// CV-X-IF boundary module.
+// Receives cvxif_req_o fields from CVA6, drives cvxif_resp_i fields back.
+// Instantiates tinygpu_fsm and fourc_1_wrapper.
+// No scalar writeback to CVA6 register file (vec arith results stay in GPU VRF).
+module tinygpu_cvxif_wrap (
+    input  wire        clk,
+    input  wire        rst_ni,         // active-low
+
+    // ---- CV-X-IF issue channel (from CVA6 cvxif_req_o) ----
+    input  wire        issue_valid,
+    input  wire [31:0] issue_instr,
+    input  wire [2:0]  issue_id,
+    input  wire [63:0] issue_rs1,      // scalar rs1 = vle64 base address
+
+    // ---- CV-X-IF issue response (to CVA6 cvxif_resp_i) ----
+    output wire        issue_ready,
+    output wire        issue_accept,
+    output wire        issue_writeback, // always 0: no scalar writeback
+
+    // ---- CV-X-IF commit channel (from CVA6 cvxif_req_o) ----
+    input  wire        commit_valid,
+    input  wire [2:0]  commit_id,
+    input  wire        commit_kill,
+
+    // ---- CV-X-IF result channel (to CVA6 cvxif_resp_i) ----
+    input  wire        result_ready,
+    output wire        result_valid,
+    output wire [2:0]  result_id,
+    output wire [63:0] result_data,    // tied 0, no scalar result
+    output wire [4:0]  result_rd,      // tied 0
+    output wire        result_we,      // tied 0
+
+    // ---- GPU AXI4 read master (for vle64 loads) ----
+    output wire [63:0] axi_araddr,
+    output wire        axi_arvalid,
+    input  wire        axi_arready,
+    input  wire [255:0]axi_rdata,
+    input  wire        axi_rvalid,
+    output wire        axi_rready
+);
+
+// No scalar writeback or result data — GPU keeps results internally // <=========
+assign issue_writeback = 1'b0;
+assign result_data     = 64'd0;
+assign result_rd       = 5'd0;
+assign result_we       = 1'b0;
+
+// Internal wires from FSM to fourc_1_wrapper
+wire [31:0]  fsm_instruction;
+wire [2047:0] fsm_w_data;
+wire          fsm_we_0;
+wire          fsm_we_1;
+wire [1:0]    fsm_pass; //for vmacc.vv <=====
+wire          fsm_acc_rst;
+wire          fsm_l3_ready;
+
+tinygpu_fsm fsm_i (
+    .clk            (clk),
+    .rst_ni         (rst_ni),
+    // issue
+    .issue_valid    (issue_valid),
+    .issue_instr    (issue_instr),
+    .issue_id       (issue_id),
+    .issue_rs1      (issue_rs1),
+    .issue_ready    (issue_ready),
+    .issue_accept   (issue_accept),
+    // commit
+    .commit_valid   (commit_valid),
+    .commit_id      (commit_id),
+    .commit_kill    (commit_kill),
+    // result
+    .result_ready   (result_ready),
+    .result_valid   (result_valid),
+    .result_id      (result_id),
+    // AXI
+    .araddr         (axi_araddr),
+    .arvalid        (axi_arvalid),
+    .arready        (axi_arready),
+    .rdata          (axi_rdata),
+    .rvalid         (axi_rvalid),
+    .rready         (axi_rready),
+    // GPU controls
+    .instruction_0  (fsm_instruction),
+    .w_data_0       (fsm_w_data),
+    .we_0           (fsm_we_0),
+    .we_1           (fsm_we_1),
+    .pass_0         (fsm_pass),
+    .acc_rst_out    (fsm_acc_rst),
+    .l3_ready       (fsm_l3_ready)
+);
+
+// Sink vd outputs — results stay in GPU VRF, not returned to CVA6 // <========== FOR NOW
+wire [63:0] vd_0_0, vd_0_1, vd_0_2, vd_0_3;
+wire [63:0] vd_1_0, vd_1_1, vd_1_2, vd_1_3;
+wire [63:0] vd_2_0, vd_2_1, vd_2_2, vd_2_3;
+wire [63:0] vd_3_0, vd_3_1, vd_3_2, vd_3_3;
+
+fourc_1_wrapper gpu_i (
+    .clk_0          (clk),
+    .rst_0          (~rst_ni),
+    .acc_rst_0_0    (fsm_acc_rst),
+    .instruction_0  (fsm_instruction),
+    .w_data_0       (fsm_w_data),
+    .we_0           (fsm_we_0),
+    .we_1           (fsm_we_1),
+    .pass_0         (fsm_pass),
+    .l3_ready       (fsm_l3_ready),
+    .vd_0_0         (vd_0_0), .vd_0_1(vd_0_1), .vd_0_2(vd_0_2), .vd_0_3(vd_0_3),
+    .vd_1_0         (vd_1_0), .vd_1_1(vd_1_1), .vd_1_2(vd_1_2), .vd_1_3(vd_1_3),
+    .vd_2_0         (vd_2_0), .vd_2_1(vd_2_1), .vd_2_2(vd_2_2), .vd_2_3(vd_2_3),
+    .vd_3_0         (vd_3_0), .vd_3_1(vd_3_1), .vd_3_2(vd_3_2), .vd_3_3(vd_3_3)
+);
+
+endmodule

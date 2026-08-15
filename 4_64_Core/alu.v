@@ -12,9 +12,9 @@ module ALU(
 wire signed [63:0] s_vs1 = vs1;
 wire signed [63:0] s_vs2 = vs2;
 wire signed [127:0] signed_prod = s_vs1 * s_vs2;
-wire [63:0] unsigned_prod = vs1 * vs2;
+wire [127:0] unsigned_prod = vs1 * vs2;
 
-reg [63:0] acc;
+reg [127:0] acc;
 
 always @(posedge clk) begin
     if (rst || acc_rst)

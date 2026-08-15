@@ -1,7 +1,8 @@
 module l3_cache(
     input clk,
     input rst,
-    input we,
+    input req,      // write request from tinygpu_fsm
+    output reg ready, // 1-cycle pulse: request accepted, write landed
 
     input [4:0] vs1,
     input [4:0] vs2,
@@ -32,11 +33,16 @@ always @(posedge clk) begin
     if (rst) begin
         for (i = 0; i < 32; i = i + 1)
             mat_mem[i] <= 1024'd0;
+        ready <= 1'b0;
     end
-    else if (we) begin
+    else if (req) begin
         // One cache-line fill installs both source matrices atomically.
         mat_mem[vs1] <= w_data[1023:0];
         mat_mem[vs2] <= w_data[2047:1024];
+        ready <= 1'b1;
+    end
+    else begin
+        ready <= 1'b0;
     end
 end
 
