@@ -64,7 +64,7 @@ always @(*) begin
         core2_b = { mat_mem[vs2][14*64 +: 64], mat_mem[vs2][10*64 +: 64], mat_mem[vs2][6*64 +: 64], mat_mem[vs2][2*64 +: 64] };
         core3_b = { mat_mem[vs2][15*64 +: 64], mat_mem[vs2][11*64 +: 64], mat_mem[vs2][7*64 +: 64], mat_mem[vs2][3*64 +: 64] };
     end else begin
-        // Existing SIMD primitives consume their current 128-bit quadrants.
+        // Existing SIMD primitives 
         core0_a = mat_mem[vs1][255:0];
         core0_b = mat_mem[vs2][255:0];
         core1_a = mat_mem[vs1][511:256];

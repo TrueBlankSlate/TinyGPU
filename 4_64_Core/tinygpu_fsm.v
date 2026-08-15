@@ -71,14 +71,11 @@ reg [31:0] instr_q; //queue
 reg [2:0]  beat_q;       // 0..7
 reg        ar_sent_q;
 
-// vmacc pass tracking (4 passes: pass 0..3, one output row per pass)
+// vmacc pass tracking (4 passes: pass 0..3, one output row per pass,
+// one we_0 fire per clock cycle -- cache.v is purely combinational so a
+// new pass_0's row is visible to RegisterFile the same cycle it changes)
 reg [1:0]  pass_q;
 reg        pass_done;
-// cache.v re-registers mat_a/mat_b on top of RegisterFile's own capture
-// register, so a new `pass_0` needs one full settle cycle before we_0
-// can safely strobe RegisterFile with that pass's row. phase=0: advance
-// pass_0 and wait; phase=1: row is settled, fire we_0 for it.
-reg        phase;
 
 assign issue_ready  = (state == IDLE);
 assign issue_accept = (state == IDLE) && issue_valid && is_mine;
@@ -103,7 +100,6 @@ always @(posedge clk) begin
         pass_0      <= 2'd0;
         pass_q      <= 2'd0;
         pass_done   <= 1'b0;
-        phase       <= 1'b0;
         acc_rst_out <= 1'b0;
         result_valid<= 1'b0;
         instruction_0 <= 32'd0;
@@ -121,7 +117,6 @@ always @(posedge clk) begin
                 pass_q       <= 2'd0;
                 pass_0       <= 2'd0;
                 pass_done    <= 1'b0;
-                phase        <= 1'b0;
 
                 // when the issue is accepted
                 if (issue_accept) begin
@@ -200,28 +195,22 @@ always @(posedge clk) begin
                         // vmacc (4x4 matmul) needs 4 passes: pass i broadcasts
                         // row i of A to every core, which already holds a
                         // fixed column of B, producing that pass's output row.
-                        // pass 0 was already fired by WAIT_COMMIT's we_0 pulse
-                        // (its row was settled during the whole WAIT_COMMIT
-                        // dwell, so no extra settle cycle was needed there).
-                        if (!phase) begin
-                            // advance to the next pass and let cache.v's
-                            // registered mat_a/mat_b catch up for one cycle
+                        // pass 0 was already fired by WAIT_COMMIT's we_0 pulse.
+                        // One we_0 fire per cycle -- cache.v is combinational,
+                        // so the new pass_0's row is visible to RegisterFile
+                        // the same cycle pass_0 changes, no settle cycle needed.
+                        if (pass_q == 2'd3) begin
+                            pass_done   <= 1'b1;
+                            acc_rst_out <= 1'b1; // reset acc for next vmacc op
+                            // result_valid deliberately not set here --
+                            // this we_0 pulse's dot_reg[3] capture lands
+                            // one cycle later; the (!pass_done) check
+                            // failing next cycle falls through to the
+                            // else branch below, giving that cycle to land.
+                        end else begin
                             pass_q <= pass_q + 2'd1;
                             pass_0 <= pass_q + 2'd1;
-                            phase  <= 1'b1;
-                        end else begin
-                            // row is settled now; fire we_0 to capture it
-                            we_0  <= 1'b1;
-                            phase <= 1'b0;
-                            if (pass_q == 2'd3) begin
-                                pass_done   <= 1'b1;
-                                acc_rst_out <= 1'b1; // reset acc for next vmacc op
-                                // result_valid deliberately not set here --
-                                // this we_0 pulse's dot_reg[3] capture lands
-                                // one cycle later; the (!pass_done) check
-                                // failing next cycle falls through to the
-                                // else branch below, giving that cycle to land.
-                            end
+                            we_0   <= 1'b1;      // fire immediately for the new pass
                         end
                     end else begin
                         result_valid <= 1'b1;
