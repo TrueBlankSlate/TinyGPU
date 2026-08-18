@@ -51,7 +51,7 @@ module cva6_sv_shim #(
   output logic                                noc_w_valid_o,
   input  logic                                noc_w_ready_i,
 
-  input  logic [CVA6Cfg.AxiIdWidth-1:0]     noc_b_id_i,
+  input  logic [CVA6Cfg.AxiIdWidth-1:0]     noc_b_id_i, //AxiId width, maximum = 16?
   input  logic [1:0]                        noc_b_resp_i,
   input  logic [CVA6Cfg.AxiUserWidth-1:0]   noc_b_user_i,
   input  logic                              noc_b_valid_i,
