@@ -24,13 +24,24 @@ module tinygpu_fsm (
     output reg         result_valid,
     output     [2:0]   result_id,
 
-    // AXI4 read master (for vle64 memory loads)
-    output reg [63:0]  araddr,
-    output reg         arvalid,
-    input              arready,
-    input      [255:0] rdata,
-    input              rvalid,
-    output             rready,
+    // Real AXI4 read master (for vle64 memory loads) -- same channel shape
+    // as CVA6's own noc_ar_*/noc_r_* so this can be arbitered onto the
+    // same physical memory with axi_mux, not a separate fake protocol.
+    // One burst of 32 x 64-bit beats (2048 bits total) per vle64.v, not
+    // 8 hand-rolled 256-bit requests.
+    output reg [3:0]   ar_id,
+    output reg [63:0]  ar_addr,
+    output reg [7:0]   ar_len,
+    output reg [2:0]   ar_size,
+    output reg [1:0]   ar_burst,
+    output reg         ar_valid,
+    input              ar_ready,
+    input      [3:0]   r_id,
+    input      [63:0]  r_data,
+    input      [1:0]   r_resp,
+    input              r_last,
+    input              r_valid,
+    output             r_ready,
 
     // To fourc_1_wrapper
     output reg [31:0]  instruction_0,
@@ -62,14 +73,9 @@ reg [2:0]  state;
 
 // Captured instruction fields
 reg [2:0]  id_q;
-reg [63:0] base_q;
 reg        is_vle64_q; //queue
 reg        is_vmacc_q; //queue
 reg [31:0] instr_q; //queue
-
-// AXI beat tracking — 8 x 256-bit beats = 2048 bits
-reg [2:0]  beat_q;       // 0..7
-reg        ar_sent_q;
 
 // vmacc pass tracking (4 passes: pass 0..3, one output row per pass,
 // one we_0 fire per clock cycle -- cache.v is purely combinational so a
@@ -77,24 +83,41 @@ reg        ar_sent_q;
 reg [1:0]  pass_q;
 reg        pass_done;
 
+// Latches a commit pulse that matches our tracked transaction, even if it
+// arrives before we reach WAIT_COMMIT. CVA6's cvxif_issue_register_commit_
+// if_driver.sv drives commit_valid_o = issue_valid_o && issue_ready_i --
+// i.e. synchronously with issue, not as a separate later event (this
+// config never speculates, so it always commits immediately). Since
+// issue_ready is tied high, commit_valid for a given id can pulse the
+// exact same cycle issue_accept fires for it, long before the LOAD/
+// L3_WRITE burst (32 beats) finishes and WAIT_COMMIT is even entered --
+// a live-only check in WAIT_COMMIT misses that pulse entirely and the FSM
+// hangs forever.
+reg        commit_recv_q;
+
 assign issue_ready  = (state == IDLE);
 assign issue_accept = (state == IDLE) && issue_valid && is_mine;
 assign result_id    = id_q;
-assign rready       = (state == LOAD) && ar_sent_q;
+// Always ready to accept beats once the burst is under way -- real AXI4
+// bursts auto-increment addressing on the interconnect side, so unlike
+// the old 8-beat scheme we don't need to gate readiness on a per-beat
+// address handshake.
+assign r_ready       = (state == LOAD);
 
 always @(posedge clk) begin
     if (!rst_ni) begin
         state       <= IDLE;
         id_q        <= 3'd0;
-        base_q      <= 64'd0;
         is_vle64_q  <= 1'b0;
         is_vmacc_q  <= 1'b0;
         instr_q     <= 32'd0;
-        beat_q      <= 3'd0;
-        ar_sent_q   <= 1'b0;
         w_data_0    <= 2048'd0;
-        araddr      <= 64'd0;
-        arvalid     <= 1'b0;
+        ar_id       <= 4'd0;
+        ar_addr     <= 64'd0;
+        ar_len      <= 8'd0;
+        ar_size     <= 3'd0;
+        ar_burst    <= 2'd0;
+        ar_valid    <= 1'b0;
         we_0        <= 1'b0;
         we_1        <= 1'b0;
         pass_0      <= 2'd0;
@@ -103,17 +126,28 @@ always @(posedge clk) begin
         acc_rst_out <= 1'b0;
         result_valid<= 1'b0;
         instruction_0 <= 32'd0;
+        commit_recv_q <= 1'b0;
     end else begin
         // Default pulse signals low every cycle
         we_0        <= 1'b0;
         we_1        <= 1'b0;
         acc_rst_out <= 1'b0;
 
+        // Capture a matching commit pulse the instant it appears, whatever
+        // state we're in -- see commit_recv_q's declaration comment above.
+        // Checked against issue_id during the same-cycle accept (id_q isn't
+        // latched yet then) and against id_q afterwards. WAIT_COMMIT below
+        // can still override this back to 0 in the same cycle it consumes
+        // the commit (case runs after this, so its assignment wins).
+        if (state == IDLE && issue_accept) begin
+            commit_recv_q <= commit_valid && (commit_id == issue_id);
+        end else if (commit_valid && (commit_id == id_q)) begin
+            commit_recv_q <= 1'b1;
+        end
+
         case (state)
             IDLE: begin
                 result_valid <= 1'b0;
-                beat_q       <= 3'd0;
-                ar_sent_q    <= 1'b0;
                 pass_q       <= 2'd0;
                 pass_0       <= 2'd0;
                 pass_done    <= 1'b0;
@@ -127,10 +161,16 @@ always @(posedge clk) begin
                     instruction_0 <= issue_instr;
 
                     if (is_vle64) begin
-                        base_q  <= issue_rs1;
-                        araddr  <= issue_rs1;
-                        arvalid <= 1'b1;
-                        state   <= LOAD;
+                        // One AXI4 burst: 32 beats x 8 bytes = 2048 bits.
+                        // The interconnect auto-increments the address per
+                        // beat -- no manual per-beat address math needed.
+                        ar_id    <= 4'd0;
+                        ar_addr  <= issue_rs1;
+                        ar_len   <= 8'd31;
+                        ar_size  <= 3'd3;   // 8 bytes/beat
+                        ar_burst <= 2'b01;  // INCR
+                        ar_valid <= 1'b1;
+                        state    <= LOAD;
                     end else begin
                         state   <= WAIT_COMMIT;
                     end
@@ -138,27 +178,19 @@ always @(posedge clk) begin
             end
 
             LOAD: begin
-                // Address handshake — one address per beat
-                if (arvalid && arready) begin
-                    arvalid   <= 1'b0;
-                    ar_sent_q <= 1'b1;
+                // One-shot address phase for the whole burst
+                if (ar_valid && ar_ready) begin
+                    ar_valid <= 1'b0;
                 end
 
-                // Data handshake
-                if (rvalid && rready) begin
-                    // Shift new beat into top, previous data moves down
-                    w_data_0  <= {rdata, w_data_0[2047:256]}; // <=========
-                    ar_sent_q <= 1'b0;
-
-                    if (beat_q == 3'd7) begin
-                        // All 8 beats received — issue write request to L3
-                        we_1    <= 1'b1;
-                        state   <= L3_WRITE;
-                    end else begin
-                        // Next beat: increment address by 32 bytes (256 bits)
-                        beat_q  <= beat_q + 3'd1;
-                        araddr  <= base_q + {beat_q + 3'd1, 5'b00000}; // (beat+1)*32
-                        arvalid <= 1'b1;
+                // Data phase: shift each 64-bit beat in; r_last (real AXI4)
+                // tells us the burst is done instead of counting to a fixed
+                // beat number ourselves.
+                if (r_valid && r_ready) begin
+                    w_data_0 <= {r_data, w_data_0[2047:64]};
+                    if (r_last) begin
+                        we_1  <= 1'b1;
+                        state <= L3_WRITE;
                     end
                 end
             end
@@ -172,7 +204,8 @@ always @(posedge clk) begin
             end
 
             WAIT_COMMIT: begin
-                if (commit_valid && (commit_id == id_q)) begin
+                if (commit_recv_q || (commit_valid && (commit_id == id_q))) begin
+                    commit_recv_q <= 1'b0;
                     if (commit_kill) begin
                         state <= IDLE;
                     end else if (is_vle64_q) begin

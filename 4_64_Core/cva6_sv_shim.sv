@@ -14,8 +14,13 @@ module cva6_sv_shim #(
   input  logic                    time_irq_i,
   input  logic                    debug_req_i,
 
-  // AXI / NoC interface (full AXI4, flattened for the plain-Verilog top)
-  output logic [CVA6Cfg.AxiIdWidth-1:0]     noc_aw_id_o,
+  // AXI / NoC interface (full AXI4, flattened for the plain-Verilog top).
+  // ID width is CVA6Cfg.AxiIdWidth+1: this is the ARBITRATED (post-axi_mux)
+  // bus shared between CVA6's own traffic and TinyGPU's, and axi_mux widens
+  // the ID by clog2(NoSlvPorts)=1 bit to disambiguate the two masters'
+  // responses. CVA6 itself still only ever sees AxiIdWidth-wide IDs
+  // internally -- the extra bit only exists on this shared, external side.
+  output logic [CVA6Cfg.AxiIdWidth:0]       noc_aw_id_o,
   output logic [CVA6Cfg.AxiAddrWidth-1:0]   noc_aw_addr_o,
   output logic [7:0]                        noc_aw_len_o,
   output logic [2:0]                        noc_aw_size_o,
@@ -30,7 +35,7 @@ module cva6_sv_shim #(
   output logic                              noc_aw_valid_o,
   input  logic                              noc_aw_ready_i,
 
-  output logic [CVA6Cfg.AxiIdWidth-1:0]     noc_ar_id_o,
+  output logic [CVA6Cfg.AxiIdWidth:0]       noc_ar_id_o,
   output logic [CVA6Cfg.AxiAddrWidth-1:0]   noc_ar_addr_o,
   output logic [7:0]                        noc_ar_len_o,
   output logic [2:0]                        noc_ar_size_o,
@@ -51,19 +56,39 @@ module cva6_sv_shim #(
   output logic                                noc_w_valid_o,
   input  logic                                noc_w_ready_i,
 
-  input  logic [CVA6Cfg.AxiIdWidth-1:0]     noc_b_id_i, //AxiId width, maximum = 16?
+  input  logic [CVA6Cfg.AxiIdWidth:0]       noc_b_id_i,
   input  logic [1:0]                        noc_b_resp_i,
   input  logic [CVA6Cfg.AxiUserWidth-1:0]   noc_b_user_i,
   input  logic                              noc_b_valid_i,
   output logic                              noc_b_ready_o,
 
-  input  logic [CVA6Cfg.AxiIdWidth-1:0]     noc_r_id_i,
+  input  logic [CVA6Cfg.AxiIdWidth:0]       noc_r_id_i,
   input  logic [CVA6Cfg.AxiDataWidth-1:0]   noc_r_data_i,
   input  logic [1:0]                        noc_r_resp_i,
   input  logic                              noc_r_last_i,
   input  logic [CVA6Cfg.AxiUserWidth-1:0]   noc_r_user_i,
   input  logic                              noc_r_valid_i,
   output logic                              noc_r_ready_o,
+
+  // TinyGPU's own real AXI4 read master -- arbitered onto the SAME
+  // noc_* bus above via axi_mux, not a separate memory path. Only AR/R
+  // are needed since TinyGPU never writes to system memory. ID width here
+  // is CVA6Cfg.AxiIdWidth (pre-arbitration, matching CVA6's own internal
+  // width) -- axi_mux is what widens it onto the shared noc_* side.
+  input  logic [CVA6Cfg.AxiIdWidth-1:0]   gpu_ar_id_i,
+  input  logic [CVA6Cfg.AxiAddrWidth-1:0] gpu_ar_addr_i,
+  input  logic [7:0]                      gpu_ar_len_i,
+  input  logic [2:0]                      gpu_ar_size_i,
+  input  logic [1:0]                      gpu_ar_burst_i,
+  input  logic                            gpu_ar_valid_i,
+  output logic                            gpu_ar_ready_o,
+
+  output logic [CVA6Cfg.AxiIdWidth-1:0]   gpu_r_id_o,
+  output logic [CVA6Cfg.AxiDataWidth-1:0] gpu_r_data_o,
+  output logic [1:0]                      gpu_r_resp_o,
+  output logic                            gpu_r_last_o,
+  output logic                            gpu_r_valid_o,
+  input  logic                            gpu_r_ready_i,
 
   // CVXIF -> TinyGPU
   output logic                    cvxif_issue_valid_o, //is the instruction valid to send? <=====
@@ -72,8 +97,9 @@ module cva6_sv_shim #(
   output logic [CVA6Cfg.XLEN-1:0] cvxif_issue_rs1_o, //<===== base address
 
   // TinyGPU -> CVXIF
+  input  logic                    cvxif_issue_ready_i, // is TinyGPU free to accept a new instruction (state==IDLE)?
   input  logic                    cvxif_issue_accept_i, // response <====
-  input  logic                    cvxif_issue_writeback_i, 
+  input  logic                    cvxif_issue_writeback_i,
 
   // Commit
   output logic                    cvxif_commit_valid_o,
@@ -210,13 +236,90 @@ module cva6_sv_shim #(
   };
 
   // ------------------------------------------------------------
+  // Widened (post-axi_mux) AXI/NOC types -- ID field is one bit wider
+  // than the slave-side types above, per axi_mux's own widening rule
+  // (SlvAxiIDWidth + clog2(NoSlvPorts), NoSlvPorts=2 here). These describe
+  // the single arbitrated bus shared between CVA6 and TinyGPU that
+  // actually leaves this module as noc_*_o/noc_*_i.
+  // ------------------------------------------------------------
+  localparam type mst_axi_ar_chan_t = struct packed {
+    logic [CVA6Cfg.AxiIdWidth:0]     id;
+    logic [CVA6Cfg.AxiAddrWidth-1:0] addr;
+    axi_pkg::len_t                   len;
+    axi_pkg::size_t                  size;
+    axi_pkg::burst_t                 burst;
+    logic                            lock;
+    axi_pkg::cache_t                 cache;
+    axi_pkg::prot_t                  prot;
+    axi_pkg::qos_t                   qos;
+    axi_pkg::region_t                region;
+    logic [CVA6Cfg.AxiUserWidth-1:0] user;
+  };
+
+  localparam type mst_axi_aw_chan_t = struct packed {
+    logic [CVA6Cfg.AxiIdWidth:0]     id;
+    logic [CVA6Cfg.AxiAddrWidth-1:0] addr;
+    axi_pkg::len_t                   len;
+    axi_pkg::size_t                  size;
+    axi_pkg::burst_t                 burst;
+    logic                            lock;
+    axi_pkg::cache_t                 cache;
+    axi_pkg::prot_t                  prot;
+    axi_pkg::qos_t                   qos;
+    axi_pkg::region_t                region;
+    axi_pkg::atop_t                  atop;
+    logic [CVA6Cfg.AxiUserWidth-1:0] user;
+  };
+
+  localparam type mst_b_chan_t = struct packed {
+    logic [CVA6Cfg.AxiIdWidth:0] id;
+    axi_pkg::resp_t resp;
+    logic [CVA6Cfg.AxiUserWidth-1:0] user;
+  };
+
+  localparam type mst_r_chan_t = struct packed {
+    logic [CVA6Cfg.AxiIdWidth:0] id;
+    logic [CVA6Cfg.AxiDataWidth-1:0] data;
+    axi_pkg::resp_t resp;
+    logic last;
+    logic [CVA6Cfg.AxiUserWidth-1:0] user;
+  };
+
+  localparam type mst_noc_req_t = struct packed {
+    mst_axi_aw_chan_t aw;
+    logic             aw_valid;
+    axi_w_chan_t      w;
+    logic             w_valid;
+    logic             b_ready;
+    mst_axi_ar_chan_t ar;
+    logic             ar_valid;
+    logic             r_ready;
+  };
+
+  localparam type mst_noc_resp_t = struct packed {
+    logic        aw_ready;
+    logic        ar_ready;
+    logic        w_ready;
+    logic        b_valid;
+    mst_b_chan_t b;
+    logic        r_valid;
+    mst_r_chan_t r;
+  };
+
+  // ------------------------------------------------------------
   // Internal CVXIF / AXI signals
   // ------------------------------------------------------------
   cvxif_req_t  cvxif_req;
   cvxif_resp_t cvxif_resp; //this is a struct from CVA repo <========
 
-  noc_req_t    noc_req;
+  noc_req_t    noc_req;    // CVA6's own request (slave port 0 into axi_mux)
   noc_resp_t   noc_resp;
+
+  noc_req_t    gpu_req;    // TinyGPU's request (slave port 1 into axi_mux)
+  noc_resp_t   gpu_resp;
+
+  mst_noc_req_t  mst_noc_req;  // single arbitrated bus (leaves this module)
+  mst_noc_resp_t mst_noc_resp;
 
   // ------------------------------------------------------------
   // CVA6
@@ -244,6 +347,67 @@ module cva6_sv_shim #(
   );
 
   // ------------------------------------------------------------
+  // TinyGPU's real AXI4 read request, packed into the same struct type
+  // CVA6 uses -- AW/W/B left inactive since TinyGPU never writes to
+  // system memory.
+  // ------------------------------------------------------------
+  always_comb begin
+    gpu_req = '0;
+    gpu_req.ar.id    = gpu_ar_id_i;
+    gpu_req.ar.addr  = gpu_ar_addr_i;
+    gpu_req.ar.len   = gpu_ar_len_i;
+    gpu_req.ar.size  = gpu_ar_size_i;
+    gpu_req.ar.burst = gpu_ar_burst_i;
+    gpu_req.ar_valid = gpu_ar_valid_i;
+    gpu_req.r_ready  = gpu_r_ready_i;
+  end
+
+  assign gpu_ar_ready_o = gpu_resp.ar_ready;
+  assign gpu_r_id_o     = gpu_resp.r.id;
+  assign gpu_r_data_o   = gpu_resp.r.data;
+  assign gpu_r_resp_o   = gpu_resp.r.resp;
+  assign gpu_r_last_o   = gpu_resp.r.last;
+  assign gpu_r_valid_o  = gpu_resp.r_valid;
+
+  // ------------------------------------------------------------
+  // Arbiter: CVA6's own noc_req (slave 0) + TinyGPU's gpu_req (slave 1)
+  // share one physical memory port (mst_noc_req/mst_noc_resp) instead of
+  // being two separate, unconnected masters.
+  // ------------------------------------------------------------
+  noc_req_t  [1:0] axi_mux_slv_reqs;
+  noc_resp_t [1:0] axi_mux_slv_resps;
+  assign axi_mux_slv_reqs[0] = noc_req;
+  assign axi_mux_slv_reqs[1] = gpu_req;
+  assign noc_resp = axi_mux_slv_resps[0];
+  assign gpu_resp = axi_mux_slv_resps[1];
+
+  axi_mux #(
+    .SlvAxiIDWidth (CVA6Cfg.AxiIdWidth),
+    .slv_aw_chan_t (axi_aw_chan_t),
+    .mst_aw_chan_t (mst_axi_aw_chan_t),
+    .w_chan_t      (axi_w_chan_t),
+    .slv_b_chan_t  (b_chan_t),
+    .mst_b_chan_t  (mst_b_chan_t),
+    .slv_ar_chan_t (axi_ar_chan_t),
+    .mst_ar_chan_t (mst_axi_ar_chan_t),
+    .slv_r_chan_t  (r_chan_t),
+    .mst_r_chan_t  (mst_r_chan_t),
+    .slv_req_t     (noc_req_t),
+    .slv_resp_t    (noc_resp_t),
+    .mst_req_t     (mst_noc_req_t),
+    .mst_resp_t    (mst_noc_resp_t),
+    .NoSlvPorts    (2)
+  ) i_axi_mux (
+    .clk_i       (clk_i),
+    .rst_ni      (rst_ni),
+    .test_i      (1'b0),
+    .slv_reqs_i  (axi_mux_slv_reqs),
+    .slv_resps_o (axi_mux_slv_resps),
+    .mst_req_o   (mst_noc_req),
+    .mst_resp_i  (mst_noc_resp)
+  );
+
+  // ------------------------------------------------------------
   // CVXIF: CVA6 -> TinyGPU
   // ------------------------------------------------------------
   assign cvxif_issue_valid_o = cvxif_req.issue_valid;
@@ -263,9 +427,26 @@ module cva6_sv_shim #(
   always_comb begin
     cvxif_resp = '0;
 
-    cvxif_resp.issue_ready = 1'b1;
+    // Must reflect TinyGPU's real busy/idle state, not a hardcoded 1 --
+    // cvxif_issue_register_commit_if_driver.sv commits unconditionally
+    // as soon as issue_valid_o && issue_ready_i, regardless of accept, so
+    // a stuck-high issue_ready would let CVA6 consider a second cvxif
+    // instruction (e.g. vmacc) "committed" while TinyGPU is still mid-
+    // burst on the first one (vle64's 32-beat AXI4 load), silently
+    // dropping it.
+    cvxif_resp.issue_ready = cvxif_issue_ready_i;
     cvxif_resp.issue_resp.accept = cvxif_issue_accept_i;
     cvxif_resp.issue_resp.writeback[0] = cvxif_issue_writeback_i;
+    // Tell CVA6's issue_read_operands we DO need rs1's actual register
+    // value (vle64.v's base address comes from x[rs1]). Without this,
+    // issue_read_operands.sv (line ~616) treats register_read[0]==0 as
+    // "coprocessor doesn't need rs1" and strips the RAW-hazard stall/
+    // forward for it, so cvxif_req.register.rs[0] reads whatever is
+    // sitting in the architectural regfile at issue time instead of the
+    // freshly-forwarded value -- e.g. a preceding `lui x1,...` hasn't
+    // committed yet, and rs1 reads back 0.
+    cvxif_resp.issue_resp.register_read[0] = 1'b1;
+    cvxif_resp.register_ready = 1'b1;
 
     cvxif_resp.result_valid = cvxif_result_valid_i;
     cvxif_resp.result.id    = cvxif_result_id_i;
@@ -277,58 +458,60 @@ module cva6_sv_shim #(
   end
 
   // ------------------------------------------------------------
-  // AXI / NOC pass-through (full channels)
+  // AXI / NOC pass-through (full channels) -- this is now the ARBITRATED
+  // bus (mst_noc_req/mst_noc_resp from axi_mux above), shared by CVA6 and
+  // TinyGPU, not CVA6's raw noc_req/noc_resp directly.
   // ------------------------------------------------------------
-  assign noc_aw_id_o     = noc_req.aw.id;
-  assign noc_aw_addr_o   = noc_req.aw.addr;
-  assign noc_aw_len_o    = noc_req.aw.len;
-  assign noc_aw_size_o   = noc_req.aw.size;
-  assign noc_aw_burst_o  = noc_req.aw.burst;
-  assign noc_aw_lock_o   = noc_req.aw.lock;
-  assign noc_aw_cache_o  = noc_req.aw.cache;
-  assign noc_aw_prot_o   = noc_req.aw.prot;
-  assign noc_aw_qos_o    = noc_req.aw.qos;
-  assign noc_aw_region_o = noc_req.aw.region;
-  assign noc_aw_atop_o   = noc_req.aw.atop;
-  assign noc_aw_user_o   = noc_req.aw.user;
-  assign noc_aw_valid_o  = noc_req.aw_valid;
+  assign noc_aw_id_o     = mst_noc_req.aw.id;
+  assign noc_aw_addr_o   = mst_noc_req.aw.addr;
+  assign noc_aw_len_o    = mst_noc_req.aw.len;
+  assign noc_aw_size_o   = mst_noc_req.aw.size;
+  assign noc_aw_burst_o  = mst_noc_req.aw.burst;
+  assign noc_aw_lock_o   = mst_noc_req.aw.lock;
+  assign noc_aw_cache_o  = mst_noc_req.aw.cache;
+  assign noc_aw_prot_o   = mst_noc_req.aw.prot;
+  assign noc_aw_qos_o    = mst_noc_req.aw.qos;
+  assign noc_aw_region_o = mst_noc_req.aw.region;
+  assign noc_aw_atop_o   = mst_noc_req.aw.atop;
+  assign noc_aw_user_o   = mst_noc_req.aw.user;
+  assign noc_aw_valid_o  = mst_noc_req.aw_valid;
 
-  assign noc_ar_id_o     = noc_req.ar.id;
-  assign noc_ar_addr_o   = noc_req.ar.addr;
-  assign noc_ar_len_o    = noc_req.ar.len;
-  assign noc_ar_size_o   = noc_req.ar.size;
-  assign noc_ar_burst_o  = noc_req.ar.burst;
-  assign noc_ar_lock_o   = noc_req.ar.lock;
-  assign noc_ar_cache_o  = noc_req.ar.cache;
-  assign noc_ar_prot_o   = noc_req.ar.prot;
-  assign noc_ar_qos_o    = noc_req.ar.qos;
-  assign noc_ar_region_o = noc_req.ar.region;
-  assign noc_ar_user_o   = noc_req.ar.user;
-  assign noc_ar_valid_o  = noc_req.ar_valid;
+  assign noc_ar_id_o     = mst_noc_req.ar.id;
+  assign noc_ar_addr_o   = mst_noc_req.ar.addr;
+  assign noc_ar_len_o    = mst_noc_req.ar.len;
+  assign noc_ar_size_o   = mst_noc_req.ar.size;
+  assign noc_ar_burst_o  = mst_noc_req.ar.burst;
+  assign noc_ar_lock_o   = mst_noc_req.ar.lock;
+  assign noc_ar_cache_o  = mst_noc_req.ar.cache;
+  assign noc_ar_prot_o   = mst_noc_req.ar.prot;
+  assign noc_ar_qos_o    = mst_noc_req.ar.qos;
+  assign noc_ar_region_o = mst_noc_req.ar.region;
+  assign noc_ar_user_o   = mst_noc_req.ar.user;
+  assign noc_ar_valid_o  = mst_noc_req.ar_valid;
 
-  assign noc_w_data_o  = noc_req.w.data;
-  assign noc_w_strb_o  = noc_req.w.strb;
-  assign noc_w_last_o  = noc_req.w.last;
-  assign noc_w_user_o  = noc_req.w.user;
-  assign noc_w_valid_o = noc_req.w_valid;
+  assign noc_w_data_o  = mst_noc_req.w.data;
+  assign noc_w_strb_o  = mst_noc_req.w.strb;
+  assign noc_w_last_o  = mst_noc_req.w.last;
+  assign noc_w_user_o  = mst_noc_req.w.user;
+  assign noc_w_valid_o = mst_noc_req.w_valid;
 
-  assign noc_b_ready_o = noc_req.b_ready;
-  assign noc_r_ready_o = noc_req.r_ready;
+  assign noc_b_ready_o = mst_noc_req.b_ready;
+  assign noc_r_ready_o = mst_noc_req.r_ready;
 
-  assign noc_resp.aw_ready = noc_aw_ready_i;
-  assign noc_resp.ar_ready = noc_ar_ready_i;
-  assign noc_resp.w_ready  = noc_w_ready_i;
+  assign mst_noc_resp.aw_ready = noc_aw_ready_i;
+  assign mst_noc_resp.ar_ready = noc_ar_ready_i;
+  assign mst_noc_resp.w_ready  = noc_w_ready_i;
 
-  assign noc_resp.b_valid = noc_b_valid_i;
-  assign noc_resp.b.id    = noc_b_id_i;
-  assign noc_resp.b.resp  = noc_b_resp_i;
-  assign noc_resp.b.user  = noc_b_user_i;
+  assign mst_noc_resp.b_valid = noc_b_valid_i;
+  assign mst_noc_resp.b.id    = noc_b_id_i;
+  assign mst_noc_resp.b.resp  = noc_b_resp_i;
+  assign mst_noc_resp.b.user  = noc_b_user_i;
 
-  assign noc_resp.r_valid = noc_r_valid_i;
-  assign noc_resp.r.id    = noc_r_id_i;
-  assign noc_resp.r.data  = noc_r_data_i;
-  assign noc_resp.r.resp  = noc_r_resp_i;
-  assign noc_resp.r.last  = noc_r_last_i;
-  assign noc_resp.r.user  = noc_r_user_i;
+  assign mst_noc_resp.r_valid = noc_r_valid_i;
+  assign mst_noc_resp.r.id    = noc_r_id_i;
+  assign mst_noc_resp.r.data  = noc_r_data_i;
+  assign mst_noc_resp.r.resp  = noc_r_resp_i;
+  assign mst_noc_resp.r.last  = noc_r_last_i;
+  assign mst_noc_resp.r.user  = noc_r_user_i;
 
 endmodule

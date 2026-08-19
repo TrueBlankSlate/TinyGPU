@@ -39,12 +39,19 @@ module tb_matmul;
   wire [4:0]  result_rd;
   wire        result_we;
 
-  wire [63:0] axi_araddr;
-  wire        axi_arvalid;
-  reg         axi_arready;
-  reg  [255:0]axi_rdata;
-  reg         axi_rvalid;
-  wire        axi_rready;
+  wire [3:0]  ar_id;
+  wire [63:0] ar_addr;
+  wire [7:0]  ar_len;
+  wire [2:0]  ar_size;
+  wire [1:0]  ar_burst;
+  wire        ar_valid;
+  reg         ar_ready;
+  reg  [3:0]  r_id;
+  reg  [63:0] r_data;
+  reg  [1:0]  r_resp;
+  reg         r_last;
+  reg         r_valid;
+  wire        r_ready;
 
   integer errors;
 
@@ -67,42 +74,74 @@ module tb_matmul;
     .result_data     (result_data),
     .result_rd       (result_rd),
     .result_we       (result_we),
-    .axi_araddr      (axi_araddr),
-    .axi_arvalid     (axi_arvalid),
-    .axi_arready     (axi_arready),
-    .axi_rdata       (axi_rdata),
-    .axi_rvalid      (axi_rvalid),
-    .axi_rready      (axi_rready)
+    .ar_id           (ar_id),
+    .ar_addr         (ar_addr),
+    .ar_len          (ar_len),
+    .ar_size         (ar_size),
+    .ar_burst        (ar_burst),
+    .ar_valid        (ar_valid),
+    .ar_ready        (ar_ready),
+    .r_id            (r_id),
+    .r_data          (r_data),
+    .r_resp          (r_resp),
+    .r_last          (r_last),
+    .r_valid         (r_valid),
+    .r_ready         (r_ready)
   );
 
   // ------------------------------------------------------------
-  // Behavioral AXI memory: beat b (0..7) returns word-group (b%4)'s four
-  // elements {1,2,3,4}/{5,6,7,8}/{9,10,11,12}/{13,14,15,16} -- so beats
-  // 0-3 fill L3 line vs1 with A, and beats 4-7 (b%4 repeats 0-3) fill L3
-  // line vs2 with the SAME matrix, giving B = A.
+  // Behavioral real-AXI4 memory: one 32-beat burst per vle64.v (matches
+  // tinygpu_fsm.v's ar_len=31). Word w (0..31) returns (w%16)+1, so
+  // words 0-15 give matrix A = 1..16 and words 16-31 repeat 1..16 for
+  // matrix B, giving B = A -- same data pattern as before, just delivered
+  // as 32 real 64-bit beats instead of 8 hand-rolled 256-bit ones.
   // ------------------------------------------------------------
-  reg [2:0] beat_cnt;
-  reg [63:0] group_base;
+  localparam R_IDLE = 1'b0, R_DATA = 1'b1;
+  reg       r_state;
+  reg [3:0] r_id_q;
+  reg [7:0] r_len_q;
+  reg [7:0] r_cnt;
 
   always @(posedge clk) begin
     if (!rst_ni) begin
-      axi_arready <= 1'b0;
-      axi_rvalid  <= 1'b0;
-      beat_cnt    <= 3'd0;
+      ar_ready <= 1'b0;
+      r_valid  <= 1'b0;
+      r_state  <= R_IDLE;
     end else begin
-      axi_arready <= 1'b0;
-      axi_rvalid  <= 1'b0;
-
-      if (axi_arvalid && !axi_arready) begin
-        axi_arready <= 1'b1;
-      end
-      if (axi_arready) begin
-        group_base = {59'd0, (beat_cnt % 3'd4)} * 64'd4; // 0,4,8,12
-        axi_rdata <= { group_base + 64'd4, group_base + 64'd3,
-                        group_base + 64'd2, group_base + 64'd1 };
-        axi_rvalid <= 1'b1;
-        beat_cnt   <= beat_cnt + 3'd1;
-      end
+      ar_ready <= 1'b0;
+      case (r_state)
+        R_IDLE: begin
+          r_valid <= 1'b0;
+          if (ar_valid) begin
+            ar_ready <= 1'b1;
+            r_id_q   <= ar_id;
+            r_len_q  <= ar_len;
+            r_cnt    <= 8'd0;
+            r_state  <= R_DATA;
+          end
+        end
+        R_DATA: begin
+          if (!r_valid) begin
+            r_id    <= r_id_q;
+            r_data  <= (r_cnt % 8'd16) + 64'd1;
+            r_resp  <= 2'b00;
+            r_last  <= (r_cnt == r_len_q);
+            r_valid <= 1'b1;
+          end else if (r_valid && r_ready) begin
+            if (r_cnt == r_len_q) begin
+              r_valid <= 1'b0;
+              r_state <= R_IDLE;
+            end else begin
+              r_cnt   <= r_cnt + 8'd1;
+              r_data  <= ((r_cnt + 8'd1) % 8'd16) + 64'd1;
+              r_last  <= (r_cnt + 8'd1 == r_len_q);
+              r_id    <= r_id_q;
+              r_resp  <= 2'b00;
+              r_valid <= 1'b1;
+            end
+          end
+        end
+      endcase
     end
   end
 

@@ -98,6 +98,10 @@ set cva6_files [list \
   "$CVA6_DIR/vendor/pulp-platform/common_cells/src/stream_demux.sv" \
   "$CVA6_DIR/vendor/pulp-platform/common_cells/src/lzc.sv" \
   "$CVA6_DIR/vendor/pulp-platform/common_cells/src/rr_arb_tree.sv" \
+  "$CVA6_DIR/vendor/pulp-platform/common_cells/src/spill_register_flushable.sv" \
+  "$CVA6_DIR/vendor/pulp-platform/common_cells/src/spill_register.sv" \
+  "$CVA6_DIR/vendor/pulp-platform/axi/src/axi_id_prepend.sv" \
+  "$CVA6_DIR/vendor/pulp-platform/axi/src/axi_mux.sv" \
   "$CVA6_DIR/vendor/pulp-platform/common_cells/src/shift_reg.sv" \
   "$CVA6_DIR/vendor/pulp-platform/common_cells/src/unread.sv" \
   "$CVA6_DIR/vendor/pulp-platform/common_cells/src/popcount.sv" \

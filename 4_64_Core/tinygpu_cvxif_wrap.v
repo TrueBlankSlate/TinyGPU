@@ -31,13 +31,22 @@ module tinygpu_cvxif_wrap (
     output wire [4:0]  result_rd,      // tied 0
     output wire        result_we,      // tied 0
 
-    // ---- GPU AXI4 read master (for vle64 loads) ----
-    output wire [63:0] axi_araddr,
-    output wire        axi_arvalid,
-    input  wire        axi_arready,
-    input  wire [255:0]axi_rdata,
-    input  wire        axi_rvalid,
-    output wire        axi_rready
+    // ---- Real AXI4 read master (for vle64 loads) -- same channel shape
+    // CVA6's own noc_ar_*/noc_r_* use, so it can be arbitered onto the
+    // same physical memory instead of driving a separate fake protocol ----
+    output wire [3:0]  ar_id,
+    output wire [63:0] ar_addr,
+    output wire [7:0]  ar_len,
+    output wire [2:0]  ar_size,
+    output wire [1:0]  ar_burst,
+    output wire        ar_valid,
+    input  wire        ar_ready,
+    input  wire [3:0]  r_id,
+    input  wire [63:0] r_data,
+    input  wire [1:0]  r_resp,
+    input  wire        r_last,
+    input  wire        r_valid,
+    output wire        r_ready
 );
 
 // No scalar writeback or result data — GPU keeps results internally // <=========
@@ -74,12 +83,19 @@ tinygpu_fsm fsm_i (
     .result_valid   (result_valid),
     .result_id      (result_id),
     // AXI
-    .araddr         (axi_araddr),
-    .arvalid        (axi_arvalid),
-    .arready        (axi_arready),
-    .rdata          (axi_rdata),
-    .rvalid         (axi_rvalid),
-    .rready         (axi_rready),
+    .ar_id          (ar_id),
+    .ar_addr        (ar_addr),
+    .ar_len         (ar_len),
+    .ar_size        (ar_size),
+    .ar_burst       (ar_burst),
+    .ar_valid       (ar_valid),
+    .ar_ready       (ar_ready),
+    .r_id           (r_id),
+    .r_data         (r_data),
+    .r_resp         (r_resp),
+    .r_last         (r_last),
+    .r_valid        (r_valid),
+    .r_ready        (r_ready),
     // GPU controls
     .instruction_0  (fsm_instruction),
     .w_data_0       (fsm_w_data),

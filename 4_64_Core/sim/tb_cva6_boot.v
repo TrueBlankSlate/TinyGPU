@@ -1,24 +1,36 @@
 `timescale 1ns / 1ps
 // Full-pipeline boot test: real CVA6 fetches a real boot program from a
 // behavioral AXI4 memory, hits the illegal-instruction->CVXIF offload path
-// for real, and drives cva6_sv_shim.sv's actual struct-packed ports --
-// nothing here is hand-driven the way tb_tinygpu_cvxif.v/tb_matmul.v were.
+// for real, and drives cva6_sv_shim.sv's actual struct-packed ports.
 //
-// Boot program (at BOOT_ADDR = 0x8000_0000), hand-encoded (no toolchain):
-//   lui   x1, 0x80001    0x800020B7   x1 = 0x80001000 (matrix base addr)
-//   vle64.v (vs1=1,vs2=2) 0x0020F007   load A into L3 line1, B(=A) into line2
-//   vmacc   (vs1=1,vs2=2) computed     C = A x A
-//   jal   x0, 0                       infinite self-loop (park the core)
+// Both CVA6's own fetch/load-store traffic AND TinyGPU's vle64 loads now
+// share ONE arbitrated AXI4 bus (noc_*, 5-bit ID -- axi_mux inside
+// cva6_sv_shim.sv widens CVA6Cfg.AxiIdWidth=4 by 1 bit to disambiguate the
+// two masters). One axi4_mem_slave instance services both, same as a real
+// DRAM controller would -- there is no separate GPU memory port anymore.
+//
+// Boot program (at BOOT_ADDR = 0x8000_0000). This testbench acts as the
+// last stage of a toolchain (assembler + linker): the localparams below
+// (I_LUI, I_SLLI, ...) are plain pre-encoded 32-bit machine words -- the
+// same thing `objdump -d` would print, or what a real assembler would hand
+// off -- not built up from field concatenation in RTL. No toolchain is
+// actually invoked; the encodings were derived by hand once and are held
+// fixed as literals from here on:
+//   lui   x1, 0x80001     x1 = 0xFFFFFFFF80001000 (RV64 lui sign-extends
+//                          since imm bit31 is set here)
+//   slli  x1, x1, 32      x1 = 0x8000100000000000
+//   srli  x1, x1, 32      x1 = 0x0000000080001000 (matrix base addr,
+//                          zero-extend idiom -- standard RV64 pattern for
+//                          loading a 32-bit constant with bit31 set)
+//   vle64.v (vs1=1,vs2=2)  load A into L3 line1, B(=A) into line2
+//   vmacc   (vs1=1,vs2=2)  C = A x A
+//   jal   x0, 0            infinite self-loop (park the core)
 //
 // BOOT_ADDR/MAT_ADDR deliberately sit inside CVA6Cfg.CachedRegionAddrBase/
 // Length (0x8000_0000, length 0x40000000 -- see cv64a6_imafdc_sv39_config_
 // pkg.sv). Addresses outside that region hit cva6_icache.sv's non-cacheable
-// bypass path (paddr_is_nc), which uses different transfer width/alignment
-// handling than the normal cache-line-fill path our AXI4 slave models --
-// confirmed by observation: at 0x1000, npc_q free-ran every cycle but
-// noc_ar_valid never pulsed once, consistent with the NC path's own
-// miss/request trigger (separate from the normal `miss_o`, which is
-// explicitly zeroed for NC addresses) never firing against our model.
+// bypass path, which behaves differently from the normal cache-line-fill
+// path our AXI4 slave models.
 //
 // Matrix data preloaded directly into memory at MAT_ADDR = 0x8000_1000:
 //   A = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]], B = A (same bytes
@@ -33,14 +45,15 @@ module tb_cva6_boot;
   reg rst_ni = 0;
   always #5 clk = ~clk; // 100 MHz
 
-  // ---- NOC/AXI4 (CVA6's own fetch/load-store) ----
-  wire [3:0]  noc_aw_id;   wire [63:0] noc_aw_addr; wire [7:0] noc_aw_len;
+  // ---- NOC/AXI4 -- ONE shared, arbitrated bus. ID is 5 bits now
+  // (CVA6Cfg.AxiIdWidth=4 + 1 bit axi_mux adds for 2 masters). ----
+  wire [4:0]  noc_aw_id;   wire [63:0] noc_aw_addr; wire [7:0] noc_aw_len;
   wire [2:0]  noc_aw_size; wire [1:0]  noc_aw_burst;wire       noc_aw_lock;
   wire [3:0]  noc_aw_cache;wire [2:0]  noc_aw_prot; wire [3:0] noc_aw_qos;
   wire [3:0]  noc_aw_region;wire [5:0] noc_aw_atop; wire [63:0]noc_aw_user;
   wire        noc_aw_valid; wire       noc_aw_ready;
 
-  wire [3:0]  noc_ar_id;   wire [63:0] noc_ar_addr; wire [7:0] noc_ar_len;
+  wire [4:0]  noc_ar_id;   wire [63:0] noc_ar_addr; wire [7:0] noc_ar_len;
   wire [2:0]  noc_ar_size; wire [1:0]  noc_ar_burst;wire       noc_ar_lock;
   wire [3:0]  noc_ar_cache;wire [2:0]  noc_ar_prot; wire [3:0] noc_ar_qos;
   wire [3:0]  noc_ar_region;wire [63:0]noc_ar_user;
@@ -49,20 +62,12 @@ module tb_cva6_boot;
   wire [63:0] noc_w_data;  wire [7:0]  noc_w_strb;  wire       noc_w_last;
   wire [63:0] noc_w_user;  wire        noc_w_valid; wire       noc_w_ready;
 
-  wire [3:0]  noc_b_id;    wire [1:0]  noc_b_resp;  wire [63:0]noc_b_user;
+  wire [4:0]  noc_b_id;    wire [1:0]  noc_b_resp;  wire [63:0]noc_b_user;
   wire        noc_b_valid; wire        noc_b_ready;
 
-  wire [3:0]  noc_r_id;    wire [63:0] noc_r_data;  wire [1:0] noc_r_resp;
+  wire [4:0]  noc_r_id;    wire [63:0] noc_r_data;  wire [1:0] noc_r_resp;
   wire        noc_r_last;  wire [63:0] noc_r_user;
   wire        noc_r_valid; wire        noc_r_ready;
-
-  // ---- GPU's own simplified 256-bit read master (vle64 loads) ----
-  wire [63:0]  gpu_araddr;
-  wire         gpu_arvalid;
-  reg          gpu_arready;
-  reg  [255:0] gpu_rdata;
-  reg          gpu_rvalid;
-  wire         gpu_rready;
 
   cva6_tinygpu_soc dut (
     .clk        (clk),
@@ -94,18 +99,13 @@ module tb_cva6_boot;
 
     .noc_r_id(noc_r_id), .noc_r_data(noc_r_data), .noc_r_resp(noc_r_resp),
     .noc_r_last(noc_r_last), .noc_r_user(noc_r_user),
-    .noc_r_valid(noc_r_valid), .noc_r_ready(noc_r_ready),
-
-    .gpu_araddr (gpu_araddr),
-    .gpu_arvalid(gpu_arvalid),
-    .gpu_arready(gpu_arready),
-    .gpu_rdata  (gpu_rdata),
-    .gpu_rvalid (gpu_rvalid),
-    .gpu_rready (gpu_rready)
+    .noc_r_valid(noc_r_valid), .noc_r_ready(noc_r_ready)
   );
 
-  // ---- Real AXI4 slave for CVA6's own icache/dcache traffic ----
-  axi4_mem_slave #(.ID_WIDTH(4), .ADDR_WIDTH(64), .DATA_WIDTH(64)) u_noc_mem (
+  // ---- ONE real AXI4 slave services BOTH CVA6's own traffic and
+  // TinyGPU's arbitrated vle64 loads, same as a real DRAM controller
+  // would see one arbitrated bus, not two separate masters. ----
+  axi4_mem_slave #(.ID_WIDTH(5), .ADDR_WIDTH(64), .DATA_WIDTH(64)) u_noc_mem (
     .clk(clk), .rst_ni(rst_ni),
     .ar_id(noc_ar_id), .ar_addr(noc_ar_addr), .ar_len(noc_ar_len),
     .ar_valid(noc_ar_valid), .ar_ready(noc_ar_ready),
@@ -118,49 +118,72 @@ module tb_cva6_boot;
     .b_id(noc_b_id), .b_resp(noc_b_resp), .b_valid(noc_b_valid), .b_ready(noc_b_ready)
   );
 
-  // ---- Simplified 256-bit-beat model for the GPU's own load master.
-  // Reads from the SAME backing memory as u_noc_mem (hierarchical ref),
-  // so data CVA6's boot program points at is what the GPU actually gets.
-  always @(posedge clk) begin
-    if (!rst_ni) begin
-      gpu_arready <= 1'b0;
-      gpu_rvalid  <= 1'b0;
-    end else begin
-      gpu_arready <= 1'b0;
-      gpu_rvalid  <= 1'b0;
-      if (gpu_arvalid && !gpu_arready) begin
-        gpu_arready <= 1'b1;
-      end
-      if (gpu_arready) begin
-        gpu_rdata <= { u_noc_mem.mem[u_noc_mem.widx(gpu_araddr)+3],
-                        u_noc_mem.mem[u_noc_mem.widx(gpu_araddr)+2],
-                        u_noc_mem.mem[u_noc_mem.widx(gpu_araddr)+1],
-                        u_noc_mem.mem[u_noc_mem.widx(gpu_araddr)+0] };
-        gpu_rvalid <= 1'b1;
-      end
-    end
-  end
+  // ---- "Linker output" -- pre-encoded 32-bit machine words. ----
+  // This is what an assembler's last pass would hand the linker: mnemonic
+  // in, raw opcode out. No field concatenation happens anywhere below --
+  // every localparam here is the literal 32-bit instruction word CVA6 will
+  // fetch, exactly as it would appear in an objdump listing. Encodings were
+  // derived once (by hand, from the RV32/64I and our custom opcode formats)
+  // and cross-checked against the values CVA6 itself decoded in simulation
+  // (e.g. VMACC below matches the `00000000b420a057` seen in the
+  // scoreboard's commit_instr_o during bring-up).
+  localparam [31:0] I_LUI   = 32'h800010B7; // lui   x1, 0x80001      -> x1 = 0xFFFFFFFF80001000 (RV64 lui sign-extends since imm bit31 is set)
+  localparam [31:0] I_SLLI  = 32'h02009093; // slli  x1, x1, 32       -> x1 = 0x8000100000000000
+  localparam [31:0] I_SRLI  = 32'h0200D093; // srli  x1, x1, 32       -> x1 = 0x0000000080001000 (zero-extend idiom, real matrix base addr)
+  localparam [31:0] I_VLE64 = 32'h0020F007; // vle64.v vs1=1, vs2=2   (custom opcode 0000111, funct3=111 width tag) -- load A into L3 line1, B(=A) into line2
+  localparam [31:0] I_VMACC = 32'hB420A057; // vmacc   vs1=1, vs2=2   (custom opcode 1010111, funct6=0x2D)          -- C = A x A
+  localparam [31:0] I_JAL   = 32'h0000006F; // jal   x0, 0             infinite self-loop (park the core once done)
 
-  // ---- Boot program + matrix data preload ----
-  reg [31:0] lui_instr, vle64_instr, vmacc_instr, jal_instr;
-  integer k;
+  // ---- Matrix A/B "data section" -- pre-encoded 64-bit data words. ----
+  // A = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]] (row-major),
+  // B = A (same 16 words repeated), so C = A x A -- directly comparable to
+  // tb_matmul.v's hand-computed expected result.
+  localparam [63:0] D_A00 = 64'd1,  D_A01 = 64'd2,  D_A02 = 64'd3,  D_A03 = 64'd4;
+  localparam [63:0] D_A10 = 64'd5,  D_A11 = 64'd6,  D_A12 = 64'd7,  D_A13 = 64'd8;
+  localparam [63:0] D_A20 = 64'd9,  D_A21 = 64'd10, D_A22 = 64'd11, D_A23 = 64'd12;
+  localparam [63:0] D_A30 = 64'd13, D_A31 = 64'd14, D_A32 = 64'd15, D_A33 = 64'd16;
 
   initial begin
-    lui_instr   = {20'h80001, 5'd1, 7'b0110111};                   // lui x1, 0x80001 -> x1=0x80001000
-    vle64_instr = {7'b0000000, 5'd2, 5'd1, 3'b111, 5'd0, 7'b0000111}; // vle64.v vs1=1 vs2=2
-    vmacc_instr = {6'h2D, 1'b0, 5'd2, 5'd1, 3'b010, 5'd0, 7'b1010111}; // vmacc  vs1=1 vs2=2
-    jal_instr   = {1'b0, 10'b0, 1'b0, 8'b0, 5'd0, 7'b1101111};        // jal x0, 0 (self-loop)
+    // BOOT_ADDR is 16B-aligned -> all 6 instructions land in 3 consecutive
+    // 64-bit words (2 x 32-bit instrs/word, little-endian word pairing).
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)]   = {I_SLLI,  I_LUI};   // +0x0 lui,  +0x4 slli
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+1] = {I_VLE64, I_SRLI};  // +0x8 srli, +0xc vle64
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+2] = {I_JAL,   I_VMACC}; // +0x10 vmacc, +0x14 jal
 
-    // BOOT_ADDR is 16B-aligned -> all 4 instructions land in one icache line.
-    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)]   = {vle64_instr, lui_instr};
-    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+1] = {jal_instr,   vmacc_instr};
-
-    // Matrix A at words [MAT_ADDR..+15] = 1..16 (row-major); matrix B is
-    // the SAME 16 words repeated at [+16..+31], so B = A and C = A x A.
-    for (k = 0; k < 16; k = k + 1) begin
-      u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR) + k]      = k + 1;
-      u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR) + 16 + k]  = k + 1;
-    end
+    // Matrix A at words [MAT_ADDR+0 .. +15]; matrix B is the same 16 words
+    // repeated at [MAT_ADDR+16 .. +31].
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+0]  = D_A00;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+1]  = D_A01;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+2]  = D_A02;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+3]  = D_A03;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+4]  = D_A10;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+5]  = D_A11;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+6]  = D_A12;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+7]  = D_A13;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+8]  = D_A20;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+9]  = D_A21;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+10] = D_A22;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+11] = D_A23;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+12] = D_A30;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+13] = D_A31;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+14] = D_A32;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+15] = D_A33;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+16] = D_A00;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+17] = D_A01;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+18] = D_A02;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+19] = D_A03;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+20] = D_A10;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+21] = D_A11;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+22] = D_A12;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+23] = D_A13;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+24] = D_A20;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+25] = D_A21;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+26] = D_A22;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+27] = D_A23;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+28] = D_A30;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+29] = D_A31;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+30] = D_A32;
+    u_noc_mem.mem[u_noc_mem.widx(MAT_ADDR)+31] = D_A33;
 
     rst_ni = 1'b0;
     repeat (10) @(posedge clk);
@@ -170,7 +193,14 @@ module tb_cva6_boot;
 
     // Poll for the matmul's result landing in the GPU's output registers.
     // vd_0_0 starts at 0 and becomes 90 (see tb_matmul.v) once C[0][0] lands.
-    wait (dut.u_gpu.vd_0_0 == 64'd90);
+    // Clocked polling loop instead of `wait (...)` -- a bare `wait` on a
+    // cross-hierarchy dotted reference relies on the simulator building a
+    // correct implicit sensitivity list across module scopes, which this
+    // XSim environment has already shown to be unreliable for signals deep
+    // inside optimized instances (see the `get_objects -r` failures earlier
+    // in this bring-up). An explicit @(posedge clk) poll has no such
+    // dependency and behaves identically across simulators.
+    while (dut.u_gpu.vd_0_0 !== 64'd90) @(posedge clk);
     $display("[%0t] vd_0_0 == 90 -- matmul appears to have completed.", $time);
     repeat (20) @(posedge clk);
 

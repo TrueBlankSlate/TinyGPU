@@ -1,9 +1,17 @@
 `timescale 1ns / 1ps
 // Top-level SoC in plain Verilog-2001.
 // CVA6 is accessed via cva6_sv_shim.sv which handles all SV struct unpacking.
-// AXI widths below match cv64a6_imafdc_sv39_config_pkg.sv: AxiIdWidth=4,
-// AxiAddrWidth=64, AxiDataWidth=64, AxiUserWidth=64. Update if the config
-// package selected in add_sources.tcl changes.
+// AXI widths below match cv64a6_imafdc_sv39_config_pkg.sv: AxiAddrWidth=64,
+// AxiDataWidth=64, AxiUserWidth=64. Update if the config package selected
+// in add_sources.tcl changes.
+//
+// noc_* below is ONE shared, arbitrated AXI4 bus (CVA6's own fetch/load-
+// store traffic AND TinyGPU's vle64 loads, combined inside u_shim via
+// axi_mux) -- this is the only memory port this SoC exposes, matching what
+// a real DRAM controller / interconnect connection looks like. ID width is
+// 5 bits (CVA6's own AxiIdWidth=4, +1 bit axi_mux adds to disambiguate the
+// two masters). TinyGPU's AXI signals are purely internal wires between
+// u_shim and u_gpu now -- there is no separate GPU memory port anymore.
 module cva6_tinygpu_soc (
     input  wire        clk,
     input  wire        rst_ni,
@@ -14,8 +22,9 @@ module cva6_tinygpu_soc (
     input  wire        time_irq,
     input  wire        debug_req,
 
-    // NOC/AXI4 (connect to your DRAM controller / interconnect)
-    output wire [3:0]   noc_aw_id,
+    // NOC/AXI4 (connect to your DRAM controller / interconnect) --
+    // shared by CVA6 and TinyGPU, arbitrated inside u_shim.
+    output wire [4:0]   noc_aw_id,
     output wire [63:0]  noc_aw_addr,
     output wire [7:0]   noc_aw_len,
     output wire [2:0]   noc_aw_size,
@@ -30,7 +39,7 @@ module cva6_tinygpu_soc (
     output wire         noc_aw_valid,
     input  wire         noc_aw_ready,
 
-    output wire [3:0]   noc_ar_id,
+    output wire [4:0]   noc_ar_id,
     output wire [63:0]  noc_ar_addr,
     output wire [7:0]   noc_ar_len,
     output wire [2:0]   noc_ar_size,
@@ -51,27 +60,19 @@ module cva6_tinygpu_soc (
     output wire         noc_w_valid,
     input  wire         noc_w_ready,
 
-    input  wire [3:0]   noc_b_id,
+    input  wire [4:0]   noc_b_id,
     input  wire [1:0]   noc_b_resp,
     input  wire [63:0]  noc_b_user,
     input  wire         noc_b_valid,
     output wire         noc_b_ready,
 
-    input  wire [3:0]   noc_r_id,
+    input  wire [4:0]   noc_r_id,
     input  wire [63:0]  noc_r_data,
     input  wire [1:0]   noc_r_resp,
     input  wire         noc_r_last,
     input  wire [63:0]  noc_r_user,
     input  wire         noc_r_valid,
-    output wire         noc_r_ready,
-
-    // GPU AXI read master (connect to same memory fabric)
-    output wire [63:0]  gpu_araddr,
-    output wire         gpu_arvalid,
-    input  wire         gpu_arready,
-    input  wire [255:0] gpu_rdata,
-    input  wire         gpu_rvalid,
-    output wire         gpu_rready
+    output wire         noc_r_ready
 );
 
   // CV-X-IF flat wires between shim and GPU wrapper
@@ -91,6 +92,23 @@ module cva6_tinygpu_soc (
   wire [63:0] result_data;
   wire [4:0]  result_rd;
   wire        result_we;
+
+  // TinyGPU's real AXI4 read master -- internal only, arbitered onto
+  // noc_* inside u_shim (see axi_mux there). ID width is 4 bits here
+  // (pre-arbitration, matching CVA6Cfg.AxiIdWidth).
+  wire [3:0]  gpu_ar_id;
+  wire [63:0] gpu_ar_addr;
+  wire [7:0]  gpu_ar_len;
+  wire [2:0]  gpu_ar_size;
+  wire [1:0]  gpu_ar_burst;
+  wire        gpu_ar_valid;
+  wire        gpu_ar_ready;
+  wire [3:0]  gpu_r_id;
+  wire [63:0] gpu_r_data;
+  wire [1:0]  gpu_r_resp;
+  wire        gpu_r_last;
+  wire        gpu_r_valid;
+  wire        gpu_r_ready;
 
   cva6_sv_shim u_shim (
     .clk_i                  (clk),
@@ -150,10 +168,26 @@ module cva6_tinygpu_soc (
     .noc_r_user_i           (noc_r_user),
     .noc_r_valid_i          (noc_r_valid),
     .noc_r_ready_o          (noc_r_ready),
+
+    .gpu_ar_id_i            (gpu_ar_id),
+    .gpu_ar_addr_i          (gpu_ar_addr),
+    .gpu_ar_len_i           (gpu_ar_len),
+    .gpu_ar_size_i          (gpu_ar_size),
+    .gpu_ar_burst_i         (gpu_ar_burst),
+    .gpu_ar_valid_i         (gpu_ar_valid),
+    .gpu_ar_ready_o         (gpu_ar_ready),
+    .gpu_r_id_o             (gpu_r_id),
+    .gpu_r_data_o           (gpu_r_data),
+    .gpu_r_resp_o           (gpu_r_resp),
+    .gpu_r_last_o           (gpu_r_last),
+    .gpu_r_valid_o          (gpu_r_valid),
+    .gpu_r_ready_i          (gpu_r_ready),
+
     .cvxif_issue_valid_o    (issue_valid),
     .cvxif_issue_instr_o    (issue_instr),
     .cvxif_issue_id_o       (issue_id),
     .cvxif_issue_rs1_o      (issue_rs1),
+    .cvxif_issue_ready_i    (issue_ready),
     .cvxif_issue_accept_i   (issue_accept),
     .cvxif_issue_writeback_i(issue_writeback),
     .cvxif_commit_valid_o   (commit_valid),
@@ -186,12 +220,19 @@ module cva6_tinygpu_soc (
     .result_data     (result_data),
     .result_rd       (result_rd),
     .result_we       (result_we),
-    .axi_araddr      (gpu_araddr),
-    .axi_arvalid     (gpu_arvalid),
-    .axi_arready     (gpu_arready),
-    .axi_rdata       (gpu_rdata),
-    .axi_rvalid      (gpu_rvalid),
-    .axi_rready      (gpu_rready)
+    .ar_id           (gpu_ar_id),
+    .ar_addr         (gpu_ar_addr),
+    .ar_len          (gpu_ar_len),
+    .ar_size         (gpu_ar_size),
+    .ar_burst        (gpu_ar_burst),
+    .ar_valid        (gpu_ar_valid),
+    .ar_ready        (gpu_ar_ready),
+    .r_id            (gpu_r_id),
+    .r_data          (gpu_r_data),
+    .r_resp          (gpu_r_resp),
+    .r_last          (gpu_r_last),
+    .r_valid         (gpu_r_valid),
+    .r_ready         (gpu_r_ready)
   );
 
 endmodule

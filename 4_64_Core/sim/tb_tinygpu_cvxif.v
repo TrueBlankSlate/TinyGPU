@@ -37,13 +37,20 @@ module tb_tinygpu_cvxif;
   wire [4:0]  result_rd;
   wire        result_we;
 
-  // ---- GPU AXI4 read master (behavioral memory model below) ----
-  wire [63:0] axi_araddr;
-  wire        axi_arvalid;
-  reg         axi_arready;
-  reg  [255:0]axi_rdata;
-  reg         axi_rvalid;
-  wire        axi_rready;
+  // ---- GPU's real AXI4 read master (behavioral memory model below) ----
+  wire [3:0]  ar_id;
+  wire [63:0] ar_addr;
+  wire [7:0]  ar_len;
+  wire [2:0]  ar_size;
+  wire [1:0]  ar_burst;
+  wire        ar_valid;
+  reg         ar_ready;
+  reg  [3:0]  r_id;
+  reg  [63:0] r_data;
+  reg  [1:0]  r_resp;
+  reg         r_last;
+  reg         r_valid;
+  wire        r_ready;
 
   integer errors;
 
@@ -66,44 +73,73 @@ module tb_tinygpu_cvxif;
     .result_data     (result_data),
     .result_rd       (result_rd),
     .result_we       (result_we),
-    .axi_araddr      (axi_araddr),
-    .axi_arvalid     (axi_arvalid),
-    .axi_arready     (axi_arready),
-    .axi_rdata       (axi_rdata),
-    .axi_rvalid      (axi_rvalid),
-    .axi_rready      (axi_rready)
+    .ar_id           (ar_id),
+    .ar_addr         (ar_addr),
+    .ar_len          (ar_len),
+    .ar_size         (ar_size),
+    .ar_burst        (ar_burst),
+    .ar_valid        (ar_valid),
+    .ar_ready        (ar_ready),
+    .r_id            (r_id),
+    .r_data          (r_data),
+    .r_resp          (r_resp),
+    .r_last          (r_last),
+    .r_valid         (r_valid),
+    .r_ready         (r_ready)
   );
 
   // ------------------------------------------------------------
-  // Behavioral AXI read-only memory model, single beat in flight.
-  // Beat i (256 bits = four 64-bit elements) = {i*4+3, i*4+2, i*4+1, i*4}.
+  // Behavioral real-AXI4 memory: one 32-beat burst per vle64.v (matches
+  // tinygpu_fsm.v's ar_len=31). Word w (0..31) returns value w directly --
+  // same 0..31 sequential pattern as the old hand-rolled 8x256-bit model,
+  // just delivered as 32 real 64-bit beats.
   // ------------------------------------------------------------
-  reg [2:0] beat_cnt;
-  reg [63:0] base_addr_q;
-  reg [63:0] elem_base;
+  localparam R_IDLE = 1'b0, R_DATA = 1'b1;
+  reg       r_state;
+  reg [3:0] r_id_q;
+  reg [7:0] r_len_q;
+  reg [7:0] r_cnt;
 
   always @(posedge clk) begin
     if (!rst_ni) begin
-      axi_arready <= 1'b0;
-      axi_rvalid  <= 1'b0;
-      beat_cnt    <= 3'd0;
+      ar_ready <= 1'b0;
+      r_valid  <= 1'b0;
+      r_state  <= R_IDLE;
     end else begin
-      axi_arready <= 1'b0;
-      axi_rvalid  <= 1'b0;
-
-      if (axi_arvalid && !axi_arready) begin
-        axi_arready <= 1'b1;
-        if (beat_cnt == 3'd0) base_addr_q <= axi_araddr;
-      end
-      if (axi_arready) begin
-        // one cycle after address accept, present data: beat i holds
-        // four 64-bit elements {i*4+3, i*4+2, i*4+1, i*4}.
-        elem_base  = {61'd0, beat_cnt} * 64'd4;
-        axi_rdata <= { elem_base + 64'd3, elem_base + 64'd2,
-                       elem_base + 64'd1, elem_base + 64'd0 };
-        axi_rvalid <= 1'b1;
-        beat_cnt   <= beat_cnt + 3'd1;
-      end
+      ar_ready <= 1'b0;
+      case (r_state)
+        R_IDLE: begin
+          r_valid <= 1'b0;
+          if (ar_valid) begin
+            ar_ready <= 1'b1;
+            r_id_q   <= ar_id;
+            r_len_q  <= ar_len;
+            r_cnt    <= 8'd0;
+            r_state  <= R_DATA;
+          end
+        end
+        R_DATA: begin
+          if (!r_valid) begin
+            r_id    <= r_id_q;
+            r_data  <= {56'd0, r_cnt};
+            r_resp  <= 2'b00;
+            r_last  <= (r_cnt == r_len_q);
+            r_valid <= 1'b1;
+          end else if (r_valid && r_ready) begin
+            if (r_cnt == r_len_q) begin
+              r_valid <= 1'b0;
+              r_state <= R_IDLE;
+            end else begin
+              r_cnt   <= r_cnt + 8'd1;
+              r_data  <= {56'd0, r_cnt + 8'd1};
+              r_last  <= (r_cnt + 8'd1 == r_len_q);
+              r_id    <= r_id_q;
+              r_resp  <= 2'b00;
+              r_valid <= 1'b1;
+            end
+          end
+        end
+      endcase
     end
   end
 
