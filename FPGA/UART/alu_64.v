@@ -17,8 +17,14 @@ wire [127:0] unsigned_prod = vs1 * vs2;            // #changed
 reg [63:0] acc;                                // #changed
 
 always @(posedge clk) begin
-    if (rst || acc_rst)
+    if (rst)
         acc <= 64'd0;                          // #changed
+    else if (acc_rst) begin
+        if (we && func3 == 3'b010 && instr_id == 6'h2D)
+            acc <= signed_prod[63:0];          // start new accumulation with this cycle's product
+        else
+            acc <= 64'd0;                      // plain clear, no MAC this cycle
+    end
     else if (we && func3 == 3'b010 && instr_id == 6'h2D)
         acc <= acc + signed_prod[63:0];        // #changed
 end
@@ -67,3 +73,4 @@ always @(*) begin
 end
 
 endmodule
+    
