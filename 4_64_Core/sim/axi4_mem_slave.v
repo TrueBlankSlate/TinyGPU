@@ -13,42 +13,42 @@
 // AR/R and AW/W/B run as two independent state machines sharing one `mem`
 // array, since CVA6 can have a read and a write in flight at once.
 module axi4_mem_slave #(
-    parameter ID_WIDTH   = 4,
+    parameter ID_WIDTH = 4,
     parameter ADDR_WIDTH = 64,
     parameter DATA_WIDTH = 64,
-    parameter MEM_WORDS  = 65536   // 512 KiB, power of 2 for address masking
+    parameter MEM_WORDS = 65536 // 512 KiB, power of 2 for address masking
 )(
-    input  wire                        clk,
-    input  wire                        rst_ni,
+    input wire clk,
+    input wire rst_ni,
 
-    input  wire [ID_WIDTH-1:0]         ar_id,
-    input  wire [ADDR_WIDTH-1:0]       ar_addr,
-    input  wire [7:0]                  ar_len,
-    input  wire                        ar_valid,
-    output reg                         ar_ready,
+    input wire [ID_WIDTH-1:0] ar_id,
+    input wire [ADDR_WIDTH-1:0] ar_addr,
+    input wire [7:0] ar_len,
+    input wire ar_valid,
+    output reg ar_ready,
 
-    output reg  [ID_WIDTH-1:0]         r_id,
-    output reg  [DATA_WIDTH-1:0]       r_data,
-    output reg  [1:0]                  r_resp,
-    output reg                         r_last,
-    output reg                         r_valid,
-    input  wire                        r_ready,
+    output reg [ID_WIDTH-1:0] r_id,
+    output reg [DATA_WIDTH-1:0] r_data,
+    output reg [1:0] r_resp,
+    output reg r_last,
+    output reg r_valid,
+    input wire r_ready,
 
-    input  wire [ID_WIDTH-1:0]         aw_id,
-    input  wire [ADDR_WIDTH-1:0]       aw_addr,
-    input  wire                        aw_valid,
-    output reg                         aw_ready,
+    input wire [ID_WIDTH-1:0] aw_id,
+    input wire [ADDR_WIDTH-1:0] aw_addr,
+    input wire aw_valid,
+    output reg aw_ready,
 
-    input  wire [DATA_WIDTH-1:0]       w_data,
-    input  wire [(DATA_WIDTH/8)-1:0]   w_strb,
-    input  wire                        w_last,
-    input  wire                        w_valid,
-    output reg                         w_ready,
+    input wire [DATA_WIDTH-1:0] w_data,
+    input wire [(DATA_WIDTH/8)-1:0] w_strb,
+    input wire w_last,
+    input wire w_valid,
+    output reg w_ready,
 
-    output reg  [ID_WIDTH-1:0]         b_id,
-    output reg  [1:0]                  b_resp,
-    output reg                         b_valid,
-    input  wire                        b_ready
+    output reg [ID_WIDTH-1:0] b_id,
+    output reg [1:0] b_resp,
+    output reg b_valid,
+    input wire b_ready
 );
 
   reg [DATA_WIDTH-1:0] mem [0:MEM_WORDS-1];
@@ -62,44 +62,50 @@ module axi4_mem_slave #(
 
   // ---------------- Read channel (AR/R) ----------------
   localparam R_IDLE = 1'b0, R_DATA = 1'b1;
-  reg               r_state;
-  reg [ID_WIDTH-1:0]   r_id_q;
+  reg r_state;
+  reg [ID_WIDTH-1:0] r_id_q;
   reg [ADDR_WIDTH-1:0] r_addr_q;
-  reg [7:0]            r_len_q;
-  reg [7:0]            r_cnt;
+  reg [7:0] r_len_q;
+  reg [7:0] r_cnt;
 
   always @(posedge clk) begin
     if (!rst_ni) begin
       ar_ready <= 1'b0;
-      r_valid  <= 1'b0;
-      r_state  <= R_IDLE;
+      r_valid <= 1'b0;
+      r_state <= R_IDLE;
     end else begin
       ar_ready <= 1'b0;
       case (r_state)
+
         R_IDLE: begin
           r_valid <= 1'b0;
           if (ar_valid) begin
             ar_ready <= 1'b1;
-            r_id_q   <= ar_id;
+            r_id_q <= ar_id;
             r_addr_q <= ar_addr;
-            r_len_q  <= ar_len;
-            r_cnt    <= 8'd0;
-            r_state  <= R_DATA;
+            r_len_q <= ar_len;
+            r_cnt <= 8'd0;
+            r_state <= R_DATA;
           end
         end
+
         R_DATA: begin
           if (!r_valid) begin
             // first beat: load using the address/count as captured from AR
-            r_id    <= r_id_q;
-            r_data  <= mem[widx(r_addr_q)];
-            r_resp  <= 2'b00;
-            r_last  <= (r_cnt == r_len_q);
+            r_id <= r_id_q;
+            r_data <= mem[widx(r_addr_q)];
+            r_resp <= 2'b00;
+            r_last <= (r_cnt == r_len_q);
             r_valid <= 1'b1;
-          end else if (r_valid && r_ready) begin
+          end 
+          
+          else if (r_valid && r_ready) begin
             if (r_cnt == r_len_q) begin
               r_valid <= 1'b0;
               r_state <= R_IDLE;
-            end else begin
+            end 
+
+            else begin
               // load the NEXT beat's data/last using the incremented
               // address/count directly, in the same cycle -- computing
               // it from the pre-increment r_addr_q here (and updating
@@ -114,16 +120,19 @@ module axi4_mem_slave #(
               r_resp   <= 2'b00;
               r_valid  <= 1'b1;
             end
+
           end
         end
+
       endcase
+
     end
   end
 
   // ---------------- Write channel (AW/W/B) ----------------
   localparam W_IDLE = 2'd0, W_DATA = 2'd1, W_RESP = 2'd2;
-  reg [1:0]            w_state;
-  reg [ID_WIDTH-1:0]   w_id_q;
+  reg [1:0] w_state;
+  reg [ID_WIDTH-1:0] w_id_q;
   reg [ADDR_WIDTH-1:0] w_addr_q;
   integer bi;
 
@@ -133,9 +142,11 @@ module axi4_mem_slave #(
       w_ready  <= 1'b0;
       b_valid  <= 1'b0;
       w_state  <= W_IDLE;
-    end else begin
+    end 
+    else begin
       aw_ready <= 1'b0;
       w_ready  <= 1'b0;
+      
       case (w_state)
         W_IDLE: begin
           b_valid <= 1'b0;
@@ -146,6 +157,7 @@ module axi4_mem_slave #(
             w_state  <= W_DATA;
           end
         end
+        
         W_DATA: begin
           w_ready <= 1'b1;
           if (w_valid && w_ready) begin
@@ -159,6 +171,7 @@ module axi4_mem_slave #(
             end
           end
         end
+        
         W_RESP: begin
           b_id    <= w_id_q;
           b_resp  <= 2'b00;
@@ -168,7 +181,9 @@ module axi4_mem_slave #(
             w_state <= W_IDLE;
           end
         end
+
       endcase
+    
     end
   end
 
