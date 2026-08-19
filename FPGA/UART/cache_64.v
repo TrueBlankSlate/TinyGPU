@@ -10,27 +10,31 @@ module cache(
     input [255:0] mat_b,  // 2x2 quadrant of B  // #changed
 
     output wire [63:0] a0, a1, a2, a3,         // #changed
-    output wire [63:0] b0, b1, b2, b3          // #changed
+    output wire [63:0] b0, b1, b2, b3,         // #changed
+    output wire acc_rst                        // pulses one cycle at the start of a new matmul accumulation
 );
 
 reg [255:0] reg_a;                             // #changed
 reg [255:0] reg_b;                             // #changed
 reg [1:0] pass;
 reg we_prev;
+reg vmacc_prev;                                // tracks vmacc to detect the start of a new matmul stream
 
 wire vmacc = (func3 == 3'b010 && instr_id == 6'h2D);
 
 always @(posedge clk) begin
     if (rst) begin
-        reg_a   <= 256'd0;                     // #changed
-        reg_b   <= 256'd0;                     // #changed
-        pass    <= 2'd0;
-        we_prev <= 1'b0;
+        reg_a      <= 256'd0;                  // #changed
+        reg_b      <= 256'd0;                  // #changed
+        pass       <= 2'd0;
+        we_prev    <= 1'b0;
+        vmacc_prev <= 1'b0;
     end
     else begin
         reg_a <= mat_a;
         reg_b <= mat_b;
         we_prev <= we;
+        vmacc_prev <= vmacc;
 
         if(vmacc && we_prev && !we) begin
             if(pass == 2'd1)
@@ -42,6 +46,12 @@ always @(posedge clk) begin
             pass <= 2'd0;
     end
 end
+
+// acc_rst fires for exactly one cycle on the rising edge of vmacc,
+// i.e. the first cycle of a new matmul instruction stream. It does NOT
+// fire on the pass 0<->1 toggle within a stream, since those passes
+// belong to the same accumulation.
+assign acc_rst = vmacc && !vmacc_prev;
 
 // normal mode
 assign a0 = !vmacc ? reg_a[63:0]      : reg_a[pass*64 +: 64];          // #changed
