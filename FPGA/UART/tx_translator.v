@@ -11,17 +11,18 @@ module tx_translator(
     input [63:0] v10,
 
     input start,
-    input tx_done,
+    input tx_stop,   
+    input tx_done,   
 
-    output reg [7:0] ascii_converted_bit,
+    output reg [7:0] ascii_converted_bit,   // this is r1
     output reg tx_start,
     output reg busy,
     output reg done
 
 );
 
-reg [1:0] decider;
-reg [5:0] bit_counter;
+reg [1:0] decider;      
+reg [5:0] bit_counter;  
 
 always @(posedge clk or posedge rst) begin
 
@@ -29,8 +30,7 @@ always @(posedge clk or posedge rst) begin
 
         decider <= 0;
         bit_counter <= 0;
-
-        ascii_converted_bit <= 8'h30;
+        ascii_converted_bit <= 8'h00;
 
         tx_start <= 0;
         busy <= 0;
@@ -58,103 +58,109 @@ always @(posedge clk or posedge rst) begin
 
         end
 
-        else if (tx_done && busy) begin
+        else if (busy) begin
 
-            
+            if (tx_stop) begin
+                
+                ascii_converted_bit <= 8'h00;
+            end
 
-  if (decider == 3 && bit_counter == 63) begin
+            if (tx_done) begin
 
-                decider <= 0;
-                bit_counter <= 0;
+                if (decider == 3 && bit_counter == 63) begin
 
-                busy <= 0;
-                done <= 1;
+                    busy <= 0;
+                    done <= 1;
+
+                end
+
+                else if (bit_counter == 63) begin
+
+                    bit_counter <= 0;
+                    decider <= decider + 1;
+
+                    case (decider + 1)
+
+                        1: begin
+                            if (v01[63])
+                                ascii_converted_bit <= 8'h31;
+                            else
+                                ascii_converted_bit <= 8'h30;
+                        end
+
+                        2: begin
+                            if (v11[63])
+                                ascii_converted_bit <= 8'h31;
+                            else
+                                ascii_converted_bit <= 8'h30;
+                        end
+
+                        3: begin
+                            if (v10[63])
+                                ascii_converted_bit <= 8'h31;
+                            else
+                                ascii_converted_bit <= 8'h30;
+                        end
+
+                        default: begin
+                            ascii_converted_bit <= 8'h30;
+                        end
+
+                    endcase
+
+                    tx_start <= 1;
+
+                end
+
+                else begin
+
+                    bit_counter <= bit_counter + 1;
+
+                    case (decider)
+
+                        0: begin
+                            if (v00[63 - (bit_counter + 1)])
+                                ascii_converted_bit <= 8'h31;
+                            else
+                                ascii_converted_bit <= 8'h30;
+                        end
+
+                        1: begin
+                            if (v01[63 - (bit_counter + 1)])
+                                ascii_converted_bit <= 8'h31;
+                            else
+                                ascii_converted_bit <= 8'h30;
+                        end
+
+                        2: begin
+                            if (v11[63 - (bit_counter + 1)])
+                                ascii_converted_bit <= 8'h31;
+                            else
+                                ascii_converted_bit <= 8'h30;
+                        end
+
+                        3: begin
+                            if (v10[63 - (bit_counter + 1)])
+                                ascii_converted_bit <= 8'h31;
+                            else
+                                ascii_converted_bit <= 8'h30;
+                        end
+
+                        default: begin
+                            ascii_converted_bit <= 8'h30;
+                        end
+
+                    endcase
+
+                    tx_start <= 1;
+
+                end
 
             end
 
-            else if (bit_counter == 63) begin
+        end
 
-                bit_counter <= 0;
-                decider <= decider + 1;
-
-                case (decider + 1)
-
-                    1: begin
-                        if (v01[63])
-                            ascii_converted_bit <= 8'h31;
-                        else
-                            ascii_converted_bit <= 8'h30;
-                    end
-
-                    2: begin
-                        if (v11[63])
-                            ascii_converted_bit <= 8'h31;
-                        else
-                            ascii_converted_bit <= 8'h30;
-                    end
-
-                    3: begin
-                        if (v10[63])
-                            ascii_converted_bit <= 8'h31;
-                        else
-                            ascii_converted_bit <= 8'h30;
-                    end
-
-                    default: begin
-                        ascii_converted_bit <= 8'h30;
-                    end
-
-                endcase
-
-                tx_start <= 1;
-
-            end
-
-            else begin
-
-                bit_counter <= bit_counter + 1;
-
-                case (decider)                  
-
-0: begin
-                        if (v00[63 - (bit_counter + 1)])
-                            ascii_converted_bit <= 8'h31;
-                        else
-                            ascii_converted_bit <= 8'h30;
-                    end                    
-1: begin
-                        if (v01[63 - (bit_counter + 1)])
-                            ascii_converted_bit <= 8'h31;
-                        else
-                            ascii_converted_bit <= 8'h30;
-                    end
-2: begin
-                        if (v11[63 - (bit_counter + 1)])
-                            ascii_converted_bit <= 8'h31;
-                        else
-                            ascii_converted_bit <= 8'h30;
-                    end                    
-3: begin
-                        if (v10[63 - (bit_counter + 1)])
-                            ascii_converted_bit <= 8'h31;
-                        else
-                            ascii_converted_bit <= 8'h30;
-                    end
-                    
-
-default: begin
-                    ascii_converted_bit <= 8'h30;
-                end                    
-
-          endcase
-
-        tx_start <= 1;
-
- end
-
-end
-
-end
+    end
 
 end
 
