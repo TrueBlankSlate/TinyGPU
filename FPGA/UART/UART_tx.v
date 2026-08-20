@@ -12,7 +12,8 @@ module UART_TX #(
 
     output reg tx,
     output reg busy,
-    output reg done
+    output reg done,
+    output reg stop   
 );
 
 localparam CLKS_PER_BIT = CLK_FREQ / BAUD_RATE;
@@ -35,6 +36,7 @@ always @(posedge clk or posedge rst) begin
         tx          <= 1'b1;
         busy        <= 1'b0;
         done        <= 1'b0;
+        stop        <= 1'b0;
 
         shift_reg   <= 8'd0;
         clock_count <= 0;
@@ -45,6 +47,7 @@ always @(posedge clk or posedge rst) begin
     else begin
 
         done <= 1'b0;
+        stop <= 1'b0;
 
         case (state)
             IDLE: begin
@@ -97,6 +100,7 @@ always @(posedge clk or posedge rst) begin
                     if (bit_count == 3'd7) begin
 
                         state <= STOP;
+                        stop  <= 1'b1;   
 
                     end
 
