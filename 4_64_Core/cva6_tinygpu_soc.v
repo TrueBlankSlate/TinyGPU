@@ -110,6 +110,25 @@ module cva6_tinygpu_soc (
   wire        gpu_r_valid;
   wire        gpu_r_ready;
 
+  // TinyGPU's real AXI4 write master (vse64.v writeback) -- internal only,
+  // same arbitration/ID-width story as the read master above.
+  wire [3:0]  gpu_aw_id;
+  wire [63:0] gpu_aw_addr;
+  wire [7:0]  gpu_aw_len;
+  wire [2:0]  gpu_aw_size;
+  wire [1:0]  gpu_aw_burst;
+  wire        gpu_aw_valid;
+  wire        gpu_aw_ready;
+  wire [63:0] gpu_w_data;
+  wire [7:0]  gpu_w_strb;
+  wire        gpu_w_last;
+  wire        gpu_w_valid;
+  wire        gpu_w_ready;
+  wire [3:0]  gpu_b_id;
+  wire [1:0]  gpu_b_resp;
+  wire        gpu_b_valid;
+  wire        gpu_b_ready;
+
   cva6_sv_shim u_shim (
     .clk_i                  (clk),
     .rst_ni                 (rst_ni),
@@ -183,6 +202,23 @@ module cva6_tinygpu_soc (
     .gpu_r_valid_o          (gpu_r_valid),
     .gpu_r_ready_i          (gpu_r_ready),
 
+    .gpu_aw_id_i            (gpu_aw_id),
+    .gpu_aw_addr_i          (gpu_aw_addr),
+    .gpu_aw_len_i           (gpu_aw_len),
+    .gpu_aw_size_i          (gpu_aw_size),
+    .gpu_aw_burst_i         (gpu_aw_burst),
+    .gpu_aw_valid_i         (gpu_aw_valid),
+    .gpu_aw_ready_o         (gpu_aw_ready),
+    .gpu_w_data_i           (gpu_w_data),
+    .gpu_w_strb_i           (gpu_w_strb),
+    .gpu_w_last_i           (gpu_w_last),
+    .gpu_w_valid_i          (gpu_w_valid),
+    .gpu_w_ready_o          (gpu_w_ready),
+    .gpu_b_id_o             (gpu_b_id),
+    .gpu_b_resp_o           (gpu_b_resp),
+    .gpu_b_valid_o          (gpu_b_valid),
+    .gpu_b_ready_i          (gpu_b_ready),
+
     .cvxif_issue_valid_o    (issue_valid),
     .cvxif_issue_instr_o    (issue_instr),
     .cvxif_issue_id_o       (issue_id),
@@ -232,7 +268,23 @@ module cva6_tinygpu_soc (
     .r_resp          (gpu_r_resp),
     .r_last          (gpu_r_last),
     .r_valid         (gpu_r_valid),
-    .r_ready         (gpu_r_ready)
+    .r_ready         (gpu_r_ready),
+    .aw_id           (gpu_aw_id),
+    .aw_addr         (gpu_aw_addr),
+    .aw_len          (gpu_aw_len),
+    .aw_size         (gpu_aw_size),
+    .aw_burst        (gpu_aw_burst),
+    .aw_valid        (gpu_aw_valid),
+    .aw_ready        (gpu_aw_ready),
+    .w_data          (gpu_w_data),
+    .w_strb          (gpu_w_strb),
+    .w_last          (gpu_w_last),
+    .w_valid         (gpu_w_valid),
+    .w_ready         (gpu_w_ready),
+    .b_id            (gpu_b_id),
+    .b_resp          (gpu_b_resp),
+    .b_valid         (gpu_b_valid),
+    .b_ready         (gpu_b_ready)
   );
 
 endmodule

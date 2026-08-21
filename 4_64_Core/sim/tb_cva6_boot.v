@@ -23,7 +23,12 @@
 //                          zero-extend idiom -- standard RV64 pattern for
 //                          loading a 32-bit constant with bit31 set)
 //   vle64.v (vs1=1,vs2=2)  load A into L3 line1, B(=A) into line2
-//   vmacc   (vs1=1,vs2=2)  C = A x A
+//   vmacc   (vs1=1,vs2=2)  C_mul = A x A
+//   vadd.vv (vs1=1,vs2=2)  C_add = A + A (same original A/B lines, no reload)
+//   lui/slli/srli (x1)     x1 = 0x0000000080003000 (RESULT_ADDR, writeback dest)
+//   vse64.v (rs1=1)        write C_add (the last compute result) out to
+//                          RESULT_ADDR over TinyGPU's own AXI4 write master
+//                          (see tinygpu_fsm.v's WRITEBACK state, writeback.v)
 //   jal   x0, 0            infinite self-loop (park the core)
 //
 // BOOT_ADDR/MAT_ADDR deliberately sit inside CVA6Cfg.CachedRegionAddrBase/
@@ -36,10 +41,18 @@
 //   A = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]], B = A (same bytes
 //   repeated), matching the same C = A x A used in tb_matmul.v so results
 //   are directly comparable.
+//
+// vd_<i>_<j> = C[i][j] (i=row, j=col) uniformly for every op, vmacc
+// included. cache_l3.v's non-vmacc branch used to give each "core" a full
+// ROW of both A and B (making vd_i_j transposed relative to vmacc's own
+// convention there); it was changed to give each core a COLUMN of both A
+// and B instead -- the same transpose-read vmacc already used for B --
+// so "core N" means the same thing (column N) regardless of op.
 module tb_cva6_boot;
 
-  localparam [63:0] BOOT_ADDR = 64'h0000_0000_8000_0000;
-  localparam [63:0] MAT_ADDR  = 64'h0000_0000_8000_1000;
+  localparam [63:0] BOOT_ADDR    = 64'h0000_0000_8000_0000;
+  localparam [63:0] MAT_ADDR     = 64'h0000_0000_8000_1000;
+  localparam [63:0] RESULT_ADDR  = 64'h0000_0000_8000_3000; // vse64.v writeback destination
 
   reg clk = 0;
   reg rst_ni = 0;
@@ -131,8 +144,12 @@ module tb_cva6_boot;
   localparam [31:0] I_SLLI  = 32'h02009093; // slli  x1, x1, 32       -> x1 = 0x8000100000000000
   localparam [31:0] I_SRLI  = 32'h0200D093; // srli  x1, x1, 32       -> x1 = 0x0000000080001000 (zero-extend idiom, real matrix base addr)
   localparam [31:0] I_VLE64 = 32'h0020F007; // vle64.v vs1=1, vs2=2   (custom opcode 0000111, funct3=111 width tag) -- load A into L3 line1, B(=A) into line2
-  localparam [31:0] I_VMACC = 32'hB420A057; // vmacc   vs1=1, vs2=2   (custom opcode 1010111, funct6=0x2D)          -- C = A x A
+  localparam [31:0] I_VMACC = 32'hB420A057; // vmacc   vs1=1, vs2=2   (custom opcode 1010111, funct6=0x2D)          -- C_mul = A x A
+  localparam [31:0] I_VADD  = 32'h002081D7; // vadd.vv vs1=1, vs2=2   (real RVV encoding: opcode 1010111, funct3=000/OPIVV, funct6=0x00) -- C_add = A + A
+  localparam [31:0] I_LUI2  = 32'h800030B7; // lui   x1, 0x80003      -> x1 = 0xFFFFFFFF80003000 (writeback dest addr, same sign-extend situation as I_LUI)
+  localparam [31:0] I_VSE64 = 32'h0000F027; // vse64.v rs1=1          (real RVV store opcode 0100111, funct3=111 width tag) -- writes the last compute result (C_add) to x1 = RESULT_ADDR
   localparam [31:0] I_JAL   = 32'h0000006F; // jal   x0, 0             infinite self-loop (park the core once done)
+  localparam [31:0] I_NOP   = 32'h00000013; // addi  x0, x0, 0         real RV64I nop, pad word only, never reached
 
   // ---- Matrix A/B "data section" -- pre-encoded 64-bit data words. ----
   // A = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]] (row-major),
@@ -143,12 +160,26 @@ module tb_cva6_boot;
   localparam [63:0] D_A20 = 64'd9,  D_A21 = 64'd10, D_A22 = 64'd11, D_A23 = 64'd12;
   localparam [63:0] D_A30 = 64'd13, D_A31 = 64'd14, D_A32 = 64'd15, D_A33 = 64'd16;
 
+  // Snapshot storage -- captured the instant each op's completion is
+  // detected, before anything else (like CVA6 issuing the next op) can
+  // overwrite the live vd_* wires. $display reads from these, never from
+  // the live DUT signals directly, so a later op finishing quickly can't
+  // contaminate an earlier op's printout.
+  reg [63:0] c_mul [0:3][0:3];
+  reg [63:0] c_add [0:3][0:3];
+
   initial begin
-    // BOOT_ADDR is 16B-aligned -> all 6 instructions land in 3 consecutive
-    // 64-bit words (2 x 32-bit instrs/word, little-endian word pairing).
-    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)]   = {I_SLLI,  I_LUI};   // +0x0 lui,  +0x4 slli
-    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+1] = {I_VLE64, I_SRLI};  // +0x8 srli, +0xc vle64
-    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+2] = {I_JAL,   I_VMACC}; // +0x10 vmacc, +0x14 jal
+    // BOOT_ADDR is 16B-aligned -> all 12 instructions/pad words land in 6
+    // consecutive 64-bit words (2 x 32-bit instrs/word, little-endian word
+    // pairing). This spans 3 icache lines (16B each) instead of 1 -- each
+    // new line crossed costs one small icache line-fill miss (a few
+    // cycles), not the big 256-cycle post-reset flush.
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)]   = {I_SLLI,  I_LUI};   // +0x00 lui,   +0x04 slli
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+1] = {I_VLE64, I_SRLI};  // +0x08 srli,  +0x0c vle64
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+2] = {I_VADD,  I_VMACC}; // +0x10 vmacc, +0x14 vadd.vv
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+3] = {I_SLLI,  I_LUI2};  // +0x18 lui2,  +0x1c slli (reused, same shamt/reg)
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+4] = {I_VSE64, I_SRLI};  // +0x20 srli (reused), +0x24 vse64.v
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+5] = {I_NOP,   I_JAL};   // +0x28 jal (self-loop), +0x2c nop (unreachable pad)
 
     // Matrix A at words [MAT_ADDR+0 .. +15]; matrix B is the same 16 words
     // repeated at [MAT_ADDR+16 .. +31].
@@ -191,8 +222,8 @@ module tb_cva6_boot;
 
     $display("[%0t] Reset released, CVA6 booting from 0x%h", $time, BOOT_ADDR);
 
-    // Poll for the matmul's result landing in the GPU's output registers.
-    // vd_0_0 starts at 0 and becomes 90 (see tb_matmul.v) once C[0][0] lands.
+    // ---- vmacc: poll for C_mul[0][0] landing in the GPU's output
+    // registers. vd_0_0 starts at 0 and becomes 90 once it lands.
     // Clocked polling loop instead of `wait (...)` -- a bare `wait` on a
     // cross-hierarchy dotted reference relies on the simulator building a
     // correct implicit sensitivity list across module scopes, which this
@@ -201,20 +232,71 @@ module tb_cva6_boot;
     // in this bring-up). An explicit @(posedge clk) poll has no such
     // dependency and behaves identically across simulators.
     while (dut.u_gpu.vd_0_0 !== 64'd90) @(posedge clk);
-    $display("[%0t] vd_0_0 == 90 -- matmul appears to have completed.", $time);
+    $display("[%0t] vd_0_0 == 90 -- vmacc appears to have completed.", $time);
+
+    // Snapshot immediately -- CVA6 can issue and finish vadd.vv (only a
+    // handful of cycles once TinyGPU is idle) faster than any fixed delay
+    // here, so anything read later than THIS instant risks reading
+    // vadd.vv's result instead of vmacc's.
+    c_mul[0][0]=dut.u_gpu.vd_0_0; c_mul[0][1]=dut.u_gpu.vd_0_1; c_mul[0][2]=dut.u_gpu.vd_0_2; c_mul[0][3]=dut.u_gpu.vd_0_3;
+    c_mul[1][0]=dut.u_gpu.vd_1_0; c_mul[1][1]=dut.u_gpu.vd_1_1; c_mul[1][2]=dut.u_gpu.vd_1_2; c_mul[1][3]=dut.u_gpu.vd_1_3;
+    c_mul[2][0]=dut.u_gpu.vd_2_0; c_mul[2][1]=dut.u_gpu.vd_2_1; c_mul[2][2]=dut.u_gpu.vd_2_2; c_mul[2][3]=dut.u_gpu.vd_2_3;
+    c_mul[3][0]=dut.u_gpu.vd_3_0; c_mul[3][1]=dut.u_gpu.vd_3_1; c_mul[3][2]=dut.u_gpu.vd_3_2; c_mul[3][3]=dut.u_gpu.vd_3_3;
+
+    $display("vmacc result C_mul (vd_<row>_<col> = C_mul[row][col]):");
+    $display("  %0d %0d %0d %0d", c_mul[0][0], c_mul[0][1], c_mul[0][2], c_mul[0][3]);
+    $display("  %0d %0d %0d %0d", c_mul[1][0], c_mul[1][1], c_mul[1][2], c_mul[1][3]);
+    $display("  %0d %0d %0d %0d", c_mul[2][0], c_mul[2][1], c_mul[2][2], c_mul[2][3]);
+    $display("  %0d %0d %0d %0d", c_mul[3][0], c_mul[3][1], c_mul[3][2], c_mul[3][3]);
+
+    // ---- vadd.vv: poll for C_add[0][0] landing. Different expected value
+    // (2, not 90) so we can tell it apart from vmacc's leftover result on
+    // the same wires. CVA6 won't even issue vadd.vv until TinyGPU returns
+    // to IDLE after vmacc (issue_ready enforces that -- see cva6_sv_shim.sv),
+    // so no extra synchronization is needed here beyond the poll itself.
+    while (dut.u_gpu.vd_0_0 !== 64'd2) @(posedge clk);
+    $display("[%0t] vd_0_0 == 2 -- vadd.vv appears to have completed.", $time);
+
+    c_add[0][0]=dut.u_gpu.vd_0_0; c_add[0][1]=dut.u_gpu.vd_0_1; c_add[0][2]=dut.u_gpu.vd_0_2; c_add[0][3]=dut.u_gpu.vd_0_3;
+    c_add[1][0]=dut.u_gpu.vd_1_0; c_add[1][1]=dut.u_gpu.vd_1_1; c_add[1][2]=dut.u_gpu.vd_1_2; c_add[1][3]=dut.u_gpu.vd_1_3;
+    c_add[2][0]=dut.u_gpu.vd_2_0; c_add[2][1]=dut.u_gpu.vd_2_1; c_add[2][2]=dut.u_gpu.vd_2_2; c_add[2][3]=dut.u_gpu.vd_2_3;
+    c_add[3][0]=dut.u_gpu.vd_3_0; c_add[3][1]=dut.u_gpu.vd_3_1; c_add[3][2]=dut.u_gpu.vd_3_2; c_add[3][3]=dut.u_gpu.vd_3_3;
+
+    // vd_i_j = C_add[i][j] uniformly now (cache_l3.v's non-vmacc branch was
+    // fixed to give each core a COLUMN of both A and B, matching vmacc's
+    // convention) -- same straightforward reading as the vmacc block above.
+    $display("vadd.vv result C_add (vd_<row>_<col> = C_add[row][col]):");
+    $display("  %0d %0d %0d %0d", c_add[0][0], c_add[0][1], c_add[0][2], c_add[0][3]);
+    $display("  %0d %0d %0d %0d", c_add[1][0], c_add[1][1], c_add[1][2], c_add[1][3]);
+    $display("  %0d %0d %0d %0d", c_add[2][0], c_add[2][1], c_add[2][2], c_add[2][3]);
+    $display("  %0d %0d %0d %0d", c_add[3][0], c_add[3][1], c_add[3][2], c_add[3][3]);
+
+    // ---- vse64.v: real CVA6 issues the store, TinyGPU streams C_add out
+    // over its OWN AXI4 write master (tinygpu_fsm.v's WRITEBACK state) to
+    // RESULT_ADDR. Poll the memory model directly, not any internal GPU
+    // signal -- this is the same check real DRAM contents would get on an
+    // actual board, and it's a clean way to know the whole 16-beat burst
+    // landed: AXI4 writes are strictly in-order, so once the LAST element
+    // (word +15, C_add[3][3]=32) shows its final value, every earlier word
+    // in the burst is already there too.
+    while (u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+15] !== 64'd32) @(posedge clk);
+    $display("[%0t] RESULT_ADDR+15 == 32 -- vse64.v writeback appears to have completed.", $time);
+
+    $display("Writeback contents at RESULT_ADDR (read directly out of DRAM, vd_<row>_<col> = C_add[row][col]):");
+    $display("  %0d %0d %0d %0d",
+        u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+0], u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+1],
+        u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+2], u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+3]);
+    $display("  %0d %0d %0d %0d",
+        u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+4], u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+5],
+        u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+6], u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+7]);
+    $display("  %0d %0d %0d %0d",
+        u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+8], u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+9],
+        u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+10], u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+11]);
+    $display("  %0d %0d %0d %0d",
+        u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+12], u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+13],
+        u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+14], u_noc_mem.mem[u_noc_mem.widx(RESULT_ADDR)+15]);
+
     repeat (20) @(posedge clk);
-
-    $display("Result C (vd_<pass>_<core>):");
-    $display("  %0d %0d %0d %0d", dut.u_gpu.vd_0_0, dut.u_gpu.vd_0_1, dut.u_gpu.vd_0_2, dut.u_gpu.vd_0_3);
-    $display("  %0d %0d %0d %0d", dut.u_gpu.vd_1_0, dut.u_gpu.vd_1_1, dut.u_gpu.vd_1_2, dut.u_gpu.vd_1_3);
-    $display("  %0d %0d %0d %0d", dut.u_gpu.vd_2_0, dut.u_gpu.vd_2_1, dut.u_gpu.vd_2_2, dut.u_gpu.vd_2_3);
-    $display("  %0d %0d %0d %0d", dut.u_gpu.vd_3_0, dut.u_gpu.vd_3_1, dut.u_gpu.vd_3_2, dut.u_gpu.vd_3_3);
-    $display("Expected:");
-    $display("   90 100 110 120");
-    $display("  202 228 254 280");
-    $display("  314 356 398 440");
-    $display("  426 484 542 600");
-
     $finish;
   end
 

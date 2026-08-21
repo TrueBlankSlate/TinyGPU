@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 // CV-X-IF command lifetime FSM.
 // States: IDLE -> LOAD (vle64 only) -> L3_WRITE -> WAIT_COMMIT -> COMPUTE
+//         IDLE -> WRITEBACK (vse64 only) -> WAIT_COMMIT
 // pass_0 is auto-incremented here for vmacc multi-pass.
 module tinygpu_fsm (
     input              clk,
@@ -43,6 +44,34 @@ module tinygpu_fsm (
     input              r_valid,
     output             r_ready,
 
+    // Real AXI4 write master (for vse64.v writeback) -- same channel shape
+    // as the read master above, arbitered onto the same shared bus. One
+    // burst of 16 x 64-bit beats (1024 bits total, one 4x4 result matrix)
+    // per vse64.v, sourced from wb_data (see writeback.v).
+    output reg [3:0]   aw_id,
+    output reg [63:0]  aw_addr,
+    output reg [7:0]   aw_len,
+    output reg [2:0]   aw_size,
+    output reg [1:0]   aw_burst,
+    output reg         aw_valid,
+    input              aw_ready,
+    output reg [63:0]  w_data,
+    output reg [7:0]   w_strb,
+    output reg         w_last,
+    output reg         w_valid,
+    input              w_ready,
+    input      [3:0]   b_id,
+    input      [1:0]   b_resp,
+    input              b_valid,
+    output             b_ready,
+
+    // Packed result of the last compute op (vmacc/vec-arith), ready to
+    // stream out beat-by-beat during WRITEBACK. Combinational from
+    // fourc_1_wrapper's vd_* outputs -- stable throughout WRITEBACK since
+    // issue_ready being low (state != IDLE) stops CVA6 from issuing a new
+    // compute op that would change it mid-stream.
+    input      [1023:0] wb_data,
+
     // To fourc_1_wrapper
     output reg [31:0]  instruction_0,
     output reg [2047:0] w_data_0,
@@ -56,11 +85,14 @@ module tinygpu_fsm (
 // Instruction decode
 wire [6:0] opcode   = issue_instr[6:0];
 wire [2:0] funct3   = issue_instr[14:12];
-// RVV width field: 3'b111 = 64-bit element width (vle64.v)
+// RVV width field: 3'b111 = 64-bit element width (vle64.v/vse64.v)
 wire       is_vle64    = (opcode == 7'b0000111) && (funct3 == 3'b111);
+// Real RVV store major opcode (STORE-FP space), mirroring vle64.v's
+// LOAD-FP opcode the same way real vse64.v mirrors real vle64.v.
+wire       is_vse64    = (opcode == 7'b0100111) && (funct3 == 3'b111);
 wire       is_vec_arith = (opcode == 7'b1010111);
 wire       is_vmacc    = is_vec_arith && (issue_instr[31:26] == 6'h2D);
-wire       is_mine     = is_vle64 | is_vec_arith;
+wire       is_mine     = is_vle64 | is_vse64 | is_vec_arith;
 
 // State encoding
 localparam IDLE        = 3'd0;
@@ -68,6 +100,7 @@ localparam LOAD        = 3'd1;
 localparam L3_WRITE    = 3'd2;
 localparam WAIT_COMMIT = 3'd3;
 localparam COMPUTE     = 3'd4;
+localparam WRITEBACK   = 3'd5;
 
 reg [2:0]  state;
 
@@ -75,7 +108,9 @@ reg [2:0]  state;
 reg [2:0]  id_q;
 reg        is_vle64_q; //queue
 reg        is_vmacc_q; //queue
+reg        is_vse64_q; //queue
 reg [31:0] instr_q; //queue
+reg [3:0]  wb_cnt;    // vse64.v write beat counter (0..15)
 
 // vmacc pass tracking (4 passes: pass 0..3, one output row per pass,
 // one we_0 fire per clock cycle -- cache.v is purely combinational so a
@@ -103,6 +138,7 @@ assign result_id    = id_q;
 // the old 8-beat scheme we don't need to gate readiness on a per-beat
 // address handshake.
 assign r_ready       = (state == LOAD);
+assign b_ready        = (state == WRITEBACK);
 
 always @(posedge clk) begin
     if (!rst_ni) begin
@@ -110,6 +146,7 @@ always @(posedge clk) begin
         id_q        <= 3'd0;
         is_vle64_q  <= 1'b0;
         is_vmacc_q  <= 1'b0;
+        is_vse64_q  <= 1'b0;
         instr_q     <= 32'd0;
         w_data_0    <= 2048'd0;
         ar_id       <= 4'd0;
@@ -118,6 +155,17 @@ always @(posedge clk) begin
         ar_size     <= 3'd0;
         ar_burst    <= 2'd0;
         ar_valid    <= 1'b0;
+        aw_id       <= 4'd0;
+        aw_addr     <= 64'd0;
+        aw_len      <= 8'd0;
+        aw_size     <= 3'd0;
+        aw_burst    <= 2'd0;
+        aw_valid    <= 1'b0;
+        w_data      <= 64'd0;
+        w_strb      <= 8'd0;
+        w_last      <= 1'b0;
+        w_valid     <= 1'b0;
+        wb_cnt      <= 4'd0;
         we_0        <= 1'b0;
         we_1        <= 1'b0;
         pass_0      <= 2'd0;
@@ -158,6 +206,7 @@ always @(posedge clk) begin
                     instr_q    <= issue_instr;
                     is_vle64_q <= is_vle64;
                     is_vmacc_q <= is_vmacc;
+                    is_vse64_q <= is_vse64;
                     instruction_0 <= issue_instr;
 
                     if (is_vle64) begin
@@ -171,6 +220,25 @@ always @(posedge clk) begin
                         ar_burst <= 2'b01;  // INCR
                         ar_valid <= 1'b1;
                         state    <= LOAD;
+                    end else if (is_vse64) begin
+                        // One AXI4 write burst: 16 beats x 8 bytes = 1024
+                        // bits -- the last compute op's full result matrix,
+                        // packed by writeback.v. AW and the first W beat are
+                        // presented together; axi4_mem_slave.v (and any
+                        // compliant AXI4 slave) won't actually accept W
+                        // until AW lands, so w_ready naturally gates this.
+                        aw_id    <= 4'd0;
+                        aw_addr  <= issue_rs1;
+                        aw_len   <= 8'd15;
+                        aw_size  <= 3'd3;   // 8 bytes/beat
+                        aw_burst <= 2'b01;  // INCR
+                        aw_valid <= 1'b1;
+                        w_data   <= wb_data[0*64 +: 64];
+                        w_strb   <= 8'hFF;
+                        w_last   <= 1'b0;
+                        w_valid  <= 1'b1;
+                        wb_cnt   <= 4'd0;
+                        state    <= WRITEBACK;
                     end else begin
                         state   <= WAIT_COMMIT;
                     end
@@ -203,13 +271,43 @@ always @(posedge clk) begin
                 end
             end
 
+            WRITEBACK: begin
+                // One-shot address phase, same shape as LOAD's AR handling.
+                if (aw_valid && aw_ready) begin
+                    aw_valid <= 1'b0;
+                end
+
+                // Data phase: stream 16 beats out of wb_data. We set w_last
+                // ourselves (we know beat 15 is the last one), the mirror
+                // image of LOAD reading r_last from the memory.
+                if (w_valid && w_ready) begin
+                    if (wb_cnt == 4'd15) begin
+                        w_valid <= 1'b0;
+                    end else begin
+                        wb_cnt  <= wb_cnt + 4'd1;
+                        w_data  <= wb_data[(wb_cnt + 4'd1)*64 +: 64];
+                        w_last  <= (wb_cnt + 4'd1 == 4'd15);
+                        w_valid <= 1'b1;
+                    end
+                end
+
+                // b_ready is asserted combinationally (assign b_ready =
+                // state==WRITEBACK, above) -- once the slave posts its
+                // write response, head to WAIT_COMMIT the same way LOAD's
+                // L3_WRITE does, so vse64.v goes through the exact same
+                // commit-catching machinery vle64.v already relies on.
+                if (b_valid && b_ready) begin
+                    state <= WAIT_COMMIT;
+                end
+            end
+
             WAIT_COMMIT: begin
                 if (commit_recv_q || (commit_valid && (commit_id == id_q))) begin
                     commit_recv_q <= 1'b0;
                     if (commit_kill) begin
                         state <= IDLE;
-                    end else if (is_vle64_q) begin
-                        // Load done, no compute needed
+                    end else if (is_vle64_q || is_vse64_q) begin
+                        // Load or writeback done, no compute needed
                         result_valid <= 1'b1;
                         state        <= IDLE;
                     end else begin

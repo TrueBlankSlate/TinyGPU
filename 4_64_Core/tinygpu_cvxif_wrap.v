@@ -46,7 +46,26 @@ module tinygpu_cvxif_wrap (
     input  wire [1:0]  r_resp,
     input  wire        r_last,
     input  wire        r_valid,
-    output wire        r_ready
+    output wire        r_ready,
+
+    // ---- Real AXI4 write master (for vse64.v writeback) -- same shape,
+    // arbitered onto the same shared bus ----
+    output wire [3:0]  aw_id,
+    output wire [63:0] aw_addr,
+    output wire [7:0]  aw_len,
+    output wire [2:0]  aw_size,
+    output wire [1:0]  aw_burst,
+    output wire        aw_valid,
+    input  wire        aw_ready,
+    output wire [63:0] w_data,
+    output wire [7:0]  w_strb,
+    output wire        w_last,
+    output wire        w_valid,
+    input  wire        w_ready,
+    input  wire [3:0]  b_id,
+    input  wire [1:0]  b_resp,
+    input  wire        b_valid,
+    output wire        b_ready
 );
 
 // No scalar writeback or result data — GPU keeps results internally // <=========
@@ -63,6 +82,9 @@ wire          fsm_we_1;
 wire [1:0]    fsm_pass; //for vmacc.vv <=====
 wire          fsm_acc_rst;
 wire          fsm_l3_ready;
+
+// Packed last-compute-result, for vse64.v's writeback (see writeback.v)
+wire [1023:0] fsm_wb_data;
 
 tinygpu_fsm fsm_i (
     .clk            (clk),
@@ -82,7 +104,7 @@ tinygpu_fsm fsm_i (
     .result_ready   (result_ready),
     .result_valid   (result_valid),
     .result_id      (result_id),
-    // AXI
+    // AXI read (vle64.v)
     .ar_id          (ar_id),
     .ar_addr        (ar_addr),
     .ar_len         (ar_len),
@@ -96,6 +118,24 @@ tinygpu_fsm fsm_i (
     .r_last         (r_last),
     .r_valid        (r_valid),
     .r_ready        (r_ready),
+    // AXI write (vse64.v)
+    .aw_id          (aw_id),
+    .aw_addr        (aw_addr),
+    .aw_len         (aw_len),
+    .aw_size        (aw_size),
+    .aw_burst       (aw_burst),
+    .aw_valid       (aw_valid),
+    .aw_ready       (aw_ready),
+    .w_data         (w_data),
+    .w_strb         (w_strb),
+    .w_last         (w_last),
+    .w_valid        (w_valid),
+    .w_ready        (w_ready),
+    .b_id           (b_id),
+    .b_resp         (b_resp),
+    .b_valid        (b_valid),
+    .b_ready        (b_ready),
+    .wb_data        (fsm_wb_data),
     // GPU controls
     .instruction_0  (fsm_instruction),
     .w_data_0       (fsm_w_data),
@@ -106,7 +146,9 @@ tinygpu_fsm fsm_i (
     .l3_ready       (fsm_l3_ready)
 );
 
-// Sink vd outputs — results stay in GPU VRF, not returned to CVA6 // <========== FOR NOW
+// vd outputs stay internal (no scalar writeback to CVA6's GPRs), but now
+// feed writeback.v so vse64.v can push the last compute result out to
+// DRAM over TinyGPU's own AXI4 write master.
 wire [63:0] vd_0_0, vd_0_1, vd_0_2, vd_0_3;
 wire [63:0] vd_1_0, vd_1_1, vd_1_2, vd_1_3;
 wire [63:0] vd_2_0, vd_2_1, vd_2_2, vd_2_3;
@@ -126,6 +168,15 @@ fourc_1_wrapper gpu_i (
     .vd_1_0         (vd_1_0), .vd_1_1(vd_1_1), .vd_1_2(vd_1_2), .vd_1_3(vd_1_3),
     .vd_2_0         (vd_2_0), .vd_2_1(vd_2_1), .vd_2_2(vd_2_2), .vd_2_3(vd_2_3),
     .vd_3_0         (vd_3_0), .vd_3_1(vd_3_1), .vd_3_2(vd_3_2), .vd_3_3(vd_3_3)
+);
+
+// Row-major pack: c0..c15 = vd_0_0..vd_3_3 = C[0][0]..C[3][3].
+writeback wb_i (
+    .c0  (vd_0_0), .c1  (vd_0_1), .c2  (vd_0_2), .c3  (vd_0_3),
+    .c4  (vd_1_0), .c5  (vd_1_1), .c6  (vd_1_2), .c7  (vd_1_3),
+    .c8  (vd_2_0), .c9  (vd_2_1), .c10 (vd_2_2), .c11 (vd_2_3),
+    .c12 (vd_3_0), .c13 (vd_3_1), .c14 (vd_3_2), .c15 (vd_3_3),
+    .c_out (fsm_wb_data)
 );
 
 endmodule

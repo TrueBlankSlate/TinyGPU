@@ -64,15 +64,21 @@ always @(*) begin
         core2_b = { mat_mem[vs2][14*64 +: 64], mat_mem[vs2][10*64 +: 64], mat_mem[vs2][6*64 +: 64], mat_mem[vs2][2*64 +: 64] };
         core3_b = { mat_mem[vs2][15*64 +: 64], mat_mem[vs2][11*64 +: 64], mat_mem[vs2][7*64 +: 64], mat_mem[vs2][3*64 +: 64] };
     end else begin
-        // Existing SIMD primitives 
-        core0_a = mat_mem[vs1][255:0];
-        core0_b = mat_mem[vs2][255:0];
-        core1_a = mat_mem[vs1][511:256];
-        core1_b = mat_mem[vs2][511:256];
-        core2_a = mat_mem[vs1][767:512];
-        core2_b = mat_mem[vs2][767:512];
-        core3_a = mat_mem[vs1][1023:768];
-        core3_b = mat_mem[vs2][1023:768];
+        // Existing SIMD primitives -- give core N column N of BOTH A and B
+        // (the same transpose-read used for B above, now applied to A too),
+        // so core N always means "column N" regardless of op. That makes
+        // vd_i_j = C[i][j] (i=row/ALU-lane, j=col/core) uniform across
+        // vmacc AND every other op -- previously this branch gave core N
+        // row N instead, which made vd_i_j = C[j][i] here specifically,
+        // transposed relative to vmacc's convention.
+        core0_a = { mat_mem[vs1][12*64 +: 64], mat_mem[vs1][8*64 +: 64], mat_mem[vs1][4*64 +: 64], mat_mem[vs1][0*64 +: 64] };
+        core0_b = { mat_mem[vs2][12*64 +: 64], mat_mem[vs2][8*64 +: 64], mat_mem[vs2][4*64 +: 64], mat_mem[vs2][0*64 +: 64] };
+        core1_a = { mat_mem[vs1][13*64 +: 64], mat_mem[vs1][9*64 +: 64], mat_mem[vs1][5*64 +: 64], mat_mem[vs1][1*64 +: 64] };
+        core1_b = { mat_mem[vs2][13*64 +: 64], mat_mem[vs2][9*64 +: 64], mat_mem[vs2][5*64 +: 64], mat_mem[vs2][1*64 +: 64] };
+        core2_a = { mat_mem[vs1][14*64 +: 64], mat_mem[vs1][10*64 +: 64], mat_mem[vs1][6*64 +: 64], mat_mem[vs1][2*64 +: 64] };
+        core2_b = { mat_mem[vs2][14*64 +: 64], mat_mem[vs2][10*64 +: 64], mat_mem[vs2][6*64 +: 64], mat_mem[vs2][2*64 +: 64] };
+        core3_a = { mat_mem[vs1][15*64 +: 64], mat_mem[vs1][11*64 +: 64], mat_mem[vs1][7*64 +: 64], mat_mem[vs1][3*64 +: 64] };
+        core3_b = { mat_mem[vs2][15*64 +: 64], mat_mem[vs2][11*64 +: 64], mat_mem[vs2][7*64 +: 64], mat_mem[vs2][3*64 +: 64] };
     end
 end
 

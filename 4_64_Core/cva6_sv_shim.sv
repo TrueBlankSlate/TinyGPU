@@ -90,6 +90,27 @@ module cva6_sv_shim #(
   output logic                            gpu_r_valid_o,
   input  logic                            gpu_r_ready_i,
 
+  // TinyGPU's own real AXI4 write master -- for vse64.v writeback, same
+  // arbitration story as the read master above.
+  input  logic [CVA6Cfg.AxiIdWidth-1:0]   gpu_aw_id_i,
+  input  logic [CVA6Cfg.AxiAddrWidth-1:0] gpu_aw_addr_i,
+  input  logic [7:0]                      gpu_aw_len_i,
+  input  logic [2:0]                      gpu_aw_size_i,
+  input  logic [1:0]                      gpu_aw_burst_i,
+  input  logic                            gpu_aw_valid_i,
+  output logic                            gpu_aw_ready_o,
+
+  input  logic [CVA6Cfg.AxiDataWidth-1:0]     gpu_w_data_i,
+  input  logic [(CVA6Cfg.AxiDataWidth/8)-1:0] gpu_w_strb_i,
+  input  logic                                gpu_w_last_i,
+  input  logic                                gpu_w_valid_i,
+  output logic                                gpu_w_ready_o,
+
+  output logic [CVA6Cfg.AxiIdWidth-1:0]   gpu_b_id_o,
+  output logic [1:0]                      gpu_b_resp_o,
+  output logic                            gpu_b_valid_o,
+  input  logic                            gpu_b_ready_i,
+
   // CVXIF -> TinyGPU
   output logic                    cvxif_issue_valid_o, //is the instruction valid to send? <=====
   output logic [31:0]             cvxif_issue_instr_o, //issue instruction <====
@@ -347,9 +368,8 @@ module cva6_sv_shim #(
   );
 
   // ------------------------------------------------------------
-  // TinyGPU's real AXI4 read request, packed into the same struct type
-  // CVA6 uses -- AW/W/B left inactive since TinyGPU never writes to
-  // system memory.
+  // TinyGPU's real AXI4 read+write request, packed into the same struct
+  // type CVA6 uses. AW/W/B carry vse64.v's writeback traffic now.
   // ------------------------------------------------------------
   always_comb begin
     gpu_req = '0;
@@ -360,6 +380,20 @@ module cva6_sv_shim #(
     gpu_req.ar.burst = gpu_ar_burst_i;
     gpu_req.ar_valid = gpu_ar_valid_i;
     gpu_req.r_ready  = gpu_r_ready_i;
+
+    gpu_req.aw.id    = gpu_aw_id_i;
+    gpu_req.aw.addr  = gpu_aw_addr_i;
+    gpu_req.aw.len   = gpu_aw_len_i;
+    gpu_req.aw.size  = gpu_aw_size_i;
+    gpu_req.aw.burst = gpu_aw_burst_i;
+    gpu_req.aw_valid = gpu_aw_valid_i;
+
+    gpu_req.w.data   = gpu_w_data_i;
+    gpu_req.w.strb   = gpu_w_strb_i;
+    gpu_req.w.last   = gpu_w_last_i;
+    gpu_req.w_valid  = gpu_w_valid_i;
+
+    gpu_req.b_ready  = gpu_b_ready_i;
   end
 
   assign gpu_ar_ready_o = gpu_resp.ar_ready;
@@ -368,6 +402,12 @@ module cva6_sv_shim #(
   assign gpu_r_resp_o   = gpu_resp.r.resp;
   assign gpu_r_last_o   = gpu_resp.r.last;
   assign gpu_r_valid_o  = gpu_resp.r_valid;
+
+  assign gpu_aw_ready_o = gpu_resp.aw_ready;
+  assign gpu_w_ready_o  = gpu_resp.w_ready;
+  assign gpu_b_id_o     = gpu_resp.b.id;
+  assign gpu_b_resp_o   = gpu_resp.b.resp;
+  assign gpu_b_valid_o  = gpu_resp.b_valid;
 
   // ------------------------------------------------------------
   // Arbiter: CVA6's own noc_req (slave 0) + TinyGPU's gpu_req (slave 1)

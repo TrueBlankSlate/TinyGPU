@@ -259,6 +259,7 @@ set tinygpu_files [list \
   "$TINYGPU_DIR/design_1_wrapper.v" \
   "$TINYGPU_DIR/fourc_1.v" \
   "$TINYGPU_DIR/fourc_1_wrapper.v" \
+  "$TINYGPU_DIR/writeback.v" \
   "$TINYGPU_DIR/tinygpu_fsm.v" \
   "$TINYGPU_DIR/tinygpu_cvxif_wrap.v" \
   "$TINYGPU_DIR/cva6_sv_shim.sv" \

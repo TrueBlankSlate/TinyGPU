@@ -84,24 +84,47 @@ module design_1
   reg  [63:0]  dot_reg [0:3];
   integer      dr_i;
 
+  // Non-vmacc ops used to expose alu_vd_k live (pure combinational, no
+  // registration at all). The instant a NEW instruction is accepted,
+  // instruction_0/func3_0/instr_id_0 switch immediately, flipping is_vmacc
+  // and re-evaluating the ALU's op -- but RegisterFile hasn't been reloaded
+  // with the new instruction's operands yet (that takes 1 cycle via we_0).
+  // For that one gap cycle, the ALU combinationally computed [new op] on
+  // [old op]'s still-registered operands, e.g. vmacc's last-pass row/column
+  // added together under vadd.vv's opcode -- a real, visible garbage value.
+  // Fix: latch alu_vd_k the same way dot_reg latches dot_sum -- only on
+  // we_0_d1 (exactly the cycle RegisterFile+ALU have settled for the
+  // CURRENT instruction), holding steady otherwise instead of tracking
+  // combinationally at all times.
+  reg  [63:0]  alu_settled_0, alu_settled_1, alu_settled_2, alu_settled_3;
+
   always @(posedge clk_0) begin
     if (rst_0) begin
       we_0_d1   <= 1'b0;
       pass_0_d1 <= 2'd0;
       for (dr_i = 0; dr_i < 4; dr_i = dr_i + 1)
         dot_reg[dr_i] <= 64'd0;
+      alu_settled_0 <= 64'd0;
+      alu_settled_1 <= 64'd0;
+      alu_settled_2 <= 64'd0;
+      alu_settled_3 <= 64'd0;
     end else begin
       we_0_d1   <= we_0;
       pass_0_d1 <= pass_0;
-      if (we_0_d1)
+      if (we_0_d1) begin
         dot_reg[pass_0_d1] <= dot_sum;
+        alu_settled_0 <= alu_vd_0;
+        alu_settled_1 <= alu_vd_1;
+        alu_settled_2 <= alu_vd_2;
+        alu_settled_3 <= alu_vd_3;
+      end
     end
   end
 
-  assign vd_0 = is_vmacc ? dot_reg[0] : alu_vd_0;
-  assign vd_1 = is_vmacc ? dot_reg[1] : alu_vd_1;
-  assign vd_2 = is_vmacc ? dot_reg[2] : alu_vd_2;
-  assign vd_3 = is_vmacc ? dot_reg[3] : alu_vd_3;
+  assign vd_0 = is_vmacc ? dot_reg[0] : alu_settled_0;
+  assign vd_1 = is_vmacc ? dot_reg[1] : alu_settled_1;
+  assign vd_2 = is_vmacc ? dot_reg[2] : alu_settled_2;
+  assign vd_3 = is_vmacc ? dot_reg[3] : alu_settled_3;
 
   ALU ALU_0
        (.acc_rst(acc_rst_0),
