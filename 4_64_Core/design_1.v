@@ -126,7 +126,15 @@ module design_1
   assign vd_2 = is_vmacc ? dot_reg[2] : alu_settled_2;
   assign vd_3 = is_vmacc ? dot_reg[3] : alu_settled_3;
 
-  ALU ALU_0
+  // keep_hierarchy="yes" on these 8 instances: diagnostic, not a functional
+  // change. Default synthesis has been merging/moving logic across these
+  // specific module boundaries, which is why RegisterFile (confirmed
+  // trivial 2-register RTL) and ALU have been reporting wildly
+  // inconsistent per-instance utilization numbers across otherwise-
+  // identical siblings. This forces each instance to keep its own true
+  // boundary, so report_utilization's numbers for these actually mean
+  // what they say.
+  (* keep_hierarchy = "yes" *) ALU ALU_0
        (.acc_rst(acc_rst_0),
         .clk(clk_0),
         .func3(func3_0),
@@ -136,7 +144,7 @@ module design_1
         .vs1(RegisterFile_0_vs1_out),
         .vs2(RegisterFile_0_vs2_out),
         .we(we_0));
-  ALU ALU_1
+  (* keep_hierarchy = "yes" *) ALU ALU_1
        (.acc_rst(acc_rst_0),
         .clk(clk_0),
         .func3(func3_0),
@@ -146,7 +154,7 @@ module design_1
         .vs1(RegisterFile_1_vs1_out),
         .vs2(RegisterFile_1_vs2_out),
         .we(we_0));
-  ALU ALU_2
+  (* keep_hierarchy = "yes" *) ALU ALU_2
        (.acc_rst(acc_rst_0),
         .clk(clk_0),
         .func3(func3_0),
@@ -156,7 +164,7 @@ module design_1
         .vs1(RegisterFile_2_vs1_out),
         .vs2(RegisterFile_2_vs2_out),
         .we(we_0));
-  ALU ALU_3
+  (* keep_hierarchy = "yes" *) ALU ALU_3
        (.acc_rst(acc_rst_0),
         .clk(clk_0),
         .func3(func3_0),
@@ -166,7 +174,7 @@ module design_1
         .vs1(RegisterFile_3_vs1_out),
         .vs2(RegisterFile_3_vs2_out),
         .we(we_0));
-  RegisterFile RegisterFile_0
+  (* keep_hierarchy = "yes" *) RegisterFile RegisterFile_0
        (.clk(clk_0),
         .rst(rst_0),
         .vs1_in(cache_0_a0),
@@ -174,7 +182,7 @@ module design_1
         .vs2_in(cache_0_b0),
         .vs2_out(RegisterFile_0_vs2_out),
         .we(we_0));
-  RegisterFile RegisterFile_1
+  (* keep_hierarchy = "yes" *) RegisterFile RegisterFile_1
        (.clk(clk_0),
         .rst(rst_0),
         .vs1_in(cache_0_a1),
@@ -182,7 +190,7 @@ module design_1
         .vs2_in(cache_0_b1),
         .vs2_out(RegisterFile_1_vs2_out),
         .we(we_0));
-  RegisterFile RegisterFile_2
+  (* keep_hierarchy = "yes" *) RegisterFile RegisterFile_2
        (.clk(clk_0),
         .rst(rst_0),
         .vs1_in(cache_0_a2),
@@ -190,7 +198,7 @@ module design_1
         .vs2_in(cache_0_b2),
         .vs2_out(RegisterFile_2_vs2_out),
         .we(we_0));
-  RegisterFile RegisterFile_3
+  (* keep_hierarchy = "yes" *) RegisterFile RegisterFile_3
        (.clk(clk_0),
         .rst(rst_0),
         .vs1_in(cache_0_a3),

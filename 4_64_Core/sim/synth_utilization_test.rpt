@@ -1,0 +1,46 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2025.2 (win64) Build 6299465 Fri Nov 14 19:35:11 GMT 2025
+| Date         : Sun Aug 23 09:35:31 2026
+| Host         : AthOS-II running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -hierarchical_depth 4 -file synth_utilization_test.rpt
+| Design       : fpga_top
+| Device       : xc7z020clg484-1
+| Speed File   : -1
+| Design State : Synthesized
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++------------------------------------------+--------------------+------------+------------+---------+------+-------+--------+--------+------------+
+|                 Instance                 |       Module       | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs  | RAMB36 | RAMB18 | DSP Blocks |
++------------------------------------------+--------------------+------------+------------+---------+------+-------+--------+--------+------------+
+| fpga_top                                 |              (top) |     115755 |      82987 |   32768 |    0 | 29598 |      0 |      0 |        220 |
+|   (fpga_top)                             |              (top) |          0 |          0 |       0 |    0 |     2 |      0 |      0 |          0 |
+|   u_mem                                  |    axi4_bram_slave |      35609 |       2841 |   32768 |    0 |   139 |      0 |      0 |          0 |
+|   u_soc                                  |   cva6_tinygpu_soc |      80146 |      80146 |       0 |    0 | 29457 |      0 |      0 |        220 |
+|     (u_soc)                              |   cva6_tinygpu_soc |        343 |        343 |       0 |    0 |     2 |      0 |      0 |          0 |
+|     u_gpu                                | tinygpu_cvxif_wrap |      41550 |      41550 |       0 |    0 | 10392 |      0 |      0 |        208 |
+|       fsm_i                              |        tinygpu_fsm |       6070 |       6070 |       0 |    0 |  2187 |      0 |      0 |          0 |
+|       gpu_i                              |    fourc_1_wrapper |      35480 |      35480 |       0 |    0 |  8205 |      0 |      0 |        208 |
+|         fourc_1_i                        |            fourc_1 |      35480 |      35480 |       0 |    0 |  8205 |      0 |      0 |        208 |
+|     u_shim                               |       cva6_sv_shim |      38253 |      38253 |       0 |    0 | 19063 |      0 |      0 |         12 |
+|       i_axi_mux                          |            axi_mux |         93 |         93 |       0 |    0 |   101 |      0 |      0 |          0 |
+|       u_cva6                             |               cva6 |      38160 |      38160 |       0 |    0 | 18962 |      0 |      0 |         12 |
+|         csr_regfile_i                    |        csr_regfile |       2859 |       2859 |       0 |    0 |  1617 |      0 |      0 |          0 |
+|         ex_stage_i                       |           ex_stage |      10920 |      10920 |       0 |    0 |  5735 |      0 |      0 |         12 |
+|         gen_cache_wt.i_cache_subsystem   | wt_cache_subsystem |       5647 |       5647 |       0 |    0 |  2324 |      0 |      0 |          0 |
+|         gen_perf_counter.perf_counters_i |      perf_counters |        179 |        179 |       0 |    0 |   414 |      0 |      0 |          0 |
+|         i_frontend                       |           frontend |       3041 |       3041 |       0 |    0 |  3943 |      0 |      0 |          0 |
+|         id_stage_i                       |           id_stage |        313 |        313 |       0 |    0 |   303 |      0 |      0 |          0 |
+|         issue_stage_i                    |        issue_stage |      15979 |      15979 |       0 |    0 |  4626 |      0 |      0 |          0 |
++------------------------------------------+--------------------+------------+------------+---------+------+-------+--------+--------+------------+
+
+

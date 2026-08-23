@@ -4,8 +4,17 @@ module l3_cache(
     input req,      // write request from tinygpu_fsm
     output reg ready, // 1-cycle pulse: request accepted, write landed
 
-    input [4:0] vs1,
-    input [4:0] vs2,
+    // Narrowed from 5 bits (32 lines) to 2 bits (4 lines) -- the current
+    // instruction set only ever addresses lines 1 and 2, and this array's
+    // combinational read (needed for same-cycle row/column broadcast, see
+    // below) can't map to Block RAM regardless of depth, so its full cost
+    // is paid in fabric logic/flip-flops. 32 lines was allocating 8x more
+    // storage+mux fabric than ever gets used. If more than 4 concurrently-
+    // live matrices are ever needed, widen this back (and vs1/vs2's field
+    // width in the instruction encoding already supports up to 32
+    // unchanged -- only the amount actually built here shrinks).
+    input [1:0] vs1,
+    input [1:0] vs2,
 
     // Two 4x4 matrices of 64-bit elements: 2 * 4 * 4 * 64 = 2048 bits.
     input [2047:0] w_data,
@@ -25,13 +34,13 @@ module l3_cache(
 );
 
 // Each cache entry is one 4x4, 64-bit-element matrix (1024 bits).
-reg [1023:0] mat_mem [0:31];
+reg [1023:0] mat_mem [0:3];
 
 integer i;
 
 always @(posedge clk) begin
     if (rst) begin
-        for (i = 0; i < 32; i = i + 1)
+        for (i = 0; i < 4; i = i + 1)
             mat_mem[i] <= 1024'd0;
         ready <= 1'b0;
     end

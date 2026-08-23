@@ -267,10 +267,23 @@ set tinygpu_files [list \
 ]
 
 # ---------------------------------------------------------------------------
+# 2b. FPGA-only sources -- synthesizable memory backend + top level. Not
+#     used by simulation (tb_cva6_boot.v etc. use sim/axi4_mem_slave.v and
+#     instantiate cva6_tinygpu_soc directly instead). Needed only when
+#     synthesizing/implementing a real bitstream.
+# ---------------------------------------------------------------------------
+set fpga_files [list \
+  "$TINYGPU_DIR/axi4_bram_slave.v" \
+  "$TINYGPU_DIR/fpga_top.v" \
+]
+
+# ---------------------------------------------------------------------------
 # 3. Add to project, set include dirs, mark file types.
 # ---------------------------------------------------------------------------
 add_files -norecurse $cva6_files
 add_files -norecurse $tinygpu_files
+add_files -norecurse $fpga_files
+add_files -norecurse "$TINYGPU_DIR/boot_image.hex"
 
 set_property include_dirs [list \
   "$CVA6_DIR/core/include" \
@@ -289,5 +302,6 @@ set_property file_type SystemVerilog [get_files "$TINYGPU_DIR/cva6_sv_shim.sv"]
 
 update_compile_order -fileset [current_fileset]
 
-puts "Added [llength $cva6_files] CVA6 files and [llength $tinygpu_files] TinyGPU files."
-puts "Set top to cva6_tinygpu_soc (or cva6_sv_shim if you want CVA6 alone) and re-run update_compile_order."
+puts "Added [llength $cva6_files] CVA6 files, [llength $tinygpu_files] TinyGPU files, and [llength $fpga_files] FPGA-only files."
+puts "For simulation: set top to cva6_tinygpu_soc (or cva6_sv_shim for CVA6 alone), add sim/*.v as simulation sources."
+puts "For synthesis/implementation: set top to fpga_top and re-run update_compile_order."
