@@ -1,9 +1,9 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 ---------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2025.2 (win64) Build 6299465 Fri Nov 14 19:35:11 GMT 2025
-| Date         : Sun Aug 23 09:35:31 2026
+| Date         : Sun Aug 23 20:56:26 2026
 | Host         : AthOS-II running 64-bit major release  (build 9200)
-| Command      : report_utilization -hierarchical -hierarchical_depth 4 -file synth_utilization_test.rpt
+| Command      : report_utilization -hierarchical -hierarchical_depth 8 -file D:/TinyGPU/TinyGPU/4_64_Core/sim/synth_utilization_test.rpt
 | Design       : fpga_top
 | Device       : xc7z020clg484-1
 | Speed File   : -1
@@ -19,28 +19,135 @@ Table of Contents
 1. Utilization by Hierarchy
 ---------------------------
 
-+------------------------------------------+--------------------+------------+------------+---------+------+-------+--------+--------+------------+
-|                 Instance                 |       Module       | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs  | RAMB36 | RAMB18 | DSP Blocks |
-+------------------------------------------+--------------------+------------+------------+---------+------+-------+--------+--------+------------+
-| fpga_top                                 |              (top) |     115755 |      82987 |   32768 |    0 | 29598 |      0 |      0 |        220 |
-|   (fpga_top)                             |              (top) |          0 |          0 |       0 |    0 |     2 |      0 |      0 |          0 |
-|   u_mem                                  |    axi4_bram_slave |      35609 |       2841 |   32768 |    0 |   139 |      0 |      0 |          0 |
-|   u_soc                                  |   cva6_tinygpu_soc |      80146 |      80146 |       0 |    0 | 29457 |      0 |      0 |        220 |
-|     (u_soc)                              |   cva6_tinygpu_soc |        343 |        343 |       0 |    0 |     2 |      0 |      0 |          0 |
-|     u_gpu                                | tinygpu_cvxif_wrap |      41550 |      41550 |       0 |    0 | 10392 |      0 |      0 |        208 |
-|       fsm_i                              |        tinygpu_fsm |       6070 |       6070 |       0 |    0 |  2187 |      0 |      0 |          0 |
-|       gpu_i                              |    fourc_1_wrapper |      35480 |      35480 |       0 |    0 |  8205 |      0 |      0 |        208 |
-|         fourc_1_i                        |            fourc_1 |      35480 |      35480 |       0 |    0 |  8205 |      0 |      0 |        208 |
-|     u_shim                               |       cva6_sv_shim |      38253 |      38253 |       0 |    0 | 19063 |      0 |      0 |         12 |
-|       i_axi_mux                          |            axi_mux |         93 |         93 |       0 |    0 |   101 |      0 |      0 |          0 |
-|       u_cva6                             |               cva6 |      38160 |      38160 |       0 |    0 | 18962 |      0 |      0 |         12 |
-|         csr_regfile_i                    |        csr_regfile |       2859 |       2859 |       0 |    0 |  1617 |      0 |      0 |          0 |
-|         ex_stage_i                       |           ex_stage |      10920 |      10920 |       0 |    0 |  5735 |      0 |      0 |         12 |
-|         gen_cache_wt.i_cache_subsystem   | wt_cache_subsystem |       5647 |       5647 |       0 |    0 |  2324 |      0 |      0 |          0 |
-|         gen_perf_counter.perf_counters_i |      perf_counters |        179 |        179 |       0 |    0 |   414 |      0 |      0 |          0 |
-|         i_frontend                       |           frontend |       3041 |       3041 |       0 |    0 |  3943 |      0 |      0 |          0 |
-|         id_stage_i                       |           id_stage |        313 |        313 |       0 |    0 |   303 |      0 |      0 |          0 |
-|         issue_stage_i                    |        issue_stage |      15979 |      15979 |       0 |    0 |  4626 |      0 |      0 |          0 |
-+------------------------------------------+--------------------+------------+------------+---------+------+-------+--------+--------+------------+
++-------------------------------------------------+--------------------------------+------------+------------+---------+------+-------+--------+--------+------------+
+|                     Instance                    |             Module             | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs  | RAMB36 | RAMB18 | DSP Blocks |
++-------------------------------------------------+--------------------------------+------------+------------+---------+------+-------+--------+--------+------------+
+| fpga_top                                        |                          (top) |      52143 |      52143 |       0 |    0 | 29562 |     40 |     72 |        168 |
+|   (fpga_top)                                    |                          (top) |          0 |          0 |       0 |    0 |     2 |      0 |      0 |          0 |
+|   u_mem                                         |                axi4_bram_slave |         64 |         64 |       0 |    0 |    59 |     16 |      0 |          0 |
+|   u_soc                                         |               cva6_tinygpu_soc |      52079 |      52079 |       0 |    0 | 29501 |     24 |     72 |        168 |
+|     (u_soc)                                     |               cva6_tinygpu_soc |        828 |        828 |       0 |    0 |     2 |      0 |      0 |          0 |
+|     u_gpu                                       |             tinygpu_cvxif_wrap |      11383 |      11383 |       0 |    0 | 10383 |      0 |      0 |        160 |
+|       fsm_i                                     |                    tinygpu_fsm |       5770 |       5770 |       0 |    0 |  2187 |      0 |      0 |          0 |
+|       gpu_i                                     |                fourc_1_wrapper |       5613 |       5613 |       0 |    0 |  8196 |      0 |      0 |        160 |
+|         fourc_1_i                               |                        fourc_1 |       5613 |       5613 |       0 |    0 |  8196 |      0 |      0 |        160 |
+|           design_1_wrapper_0                    |               design_1_wrapper |       1330 |       1330 |       0 |    0 |  1027 |      0 |      0 |         40 |
+|             design_1_i                          |                   design_1_113 |       1330 |       1330 |       0 |    0 |  1027 |      0 |      0 |         40 |
+|               (design_1_i)                      |                   design_1_113 |        646 |        646 |       0 |    0 |   515 |      0 |      0 |          0 |
+|               ALU_0                             |                         ALU__7 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_1                             |                         ALU__6 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_2                             |                         ALU__5 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_3                             |                         ALU__4 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               RegisterFile_0                    |                RegisterFile__7 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_1                    |                RegisterFile__6 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_2                    |                RegisterFile__5 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_3                    |                RegisterFile__4 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|           design_1_wrapper_1                    |           design_1_wrapper_108 |       1001 |       1001 |       0 |    0 |  1024 |      0 |      0 |         40 |
+|             design_1_i                          |                   design_1_112 |       1001 |       1001 |       0 |    0 |  1024 |      0 |      0 |         40 |
+|               (design_1_i)                      |                   design_1_112 |        317 |        317 |       0 |    0 |   512 |      0 |      0 |          0 |
+|               ALU_0                             |                        ALU__11 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_1                             |                        ALU__10 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_2                             |                         ALU__9 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_3                             |                         ALU__8 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               RegisterFile_0                    |               RegisterFile__11 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_1                    |               RegisterFile__10 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_2                    |                RegisterFile__9 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_3                    |                RegisterFile__8 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|           design_1_wrapper_2                    |           design_1_wrapper_109 |       1001 |       1001 |       0 |    0 |  1024 |      0 |      0 |         40 |
+|             design_1_i                          |                   design_1_111 |       1001 |       1001 |       0 |    0 |  1024 |      0 |      0 |         40 |
+|               (design_1_i)                      |                   design_1_111 |        317 |        317 |       0 |    0 |   512 |      0 |      0 |          0 |
+|               ALU_0                             |                        ALU__15 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_1                             |                        ALU__14 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_2                             |                        ALU__13 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_3                             |                        ALU__12 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               RegisterFile_0                    |               RegisterFile__15 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_1                    |               RegisterFile__14 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_2                    |               RegisterFile__13 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_3                    |               RegisterFile__12 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|           design_1_wrapper_3                    |           design_1_wrapper_110 |       1001 |       1001 |       0 |    0 |  1024 |      0 |      0 |         40 |
+|             design_1_i                          |                       design_1 |       1001 |       1001 |       0 |    0 |  1024 |      0 |      0 |         40 |
+|               (design_1_i)                      |                       design_1 |        317 |        317 |       0 |    0 |   512 |      0 |      0 |          0 |
+|               ALU_0                             |                         ALU__1 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_1                             |                         ALU__2 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_2                             |                         ALU__3 |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               ALU_3                             |                            ALU |        171 |        171 |       0 |    0 |     0 |      0 |      0 |         10 |
+|               RegisterFile_0                    |                RegisterFile__1 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_1                    |                RegisterFile__2 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_2                    |                RegisterFile__3 |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|               RegisterFile_3                    |                   RegisterFile |          0 |          0 |       0 |    0 |   128 |      0 |      0 |          0 |
+|           l3_cache_1                            |                       l3_cache |       1280 |       1280 |       0 |    0 |  4097 |      0 |      0 |          0 |
+|     u_shim                                      |                   cva6_sv_shim |      39868 |      39868 |       0 |    0 | 19116 |     24 |     72 |          8 |
+|       i_axi_mux                                 |                        axi_mux |         97 |         97 |       0 |    0 |   101 |      0 |      0 |          0 |
+|       u_cva6                                    |                           cva6 |      39771 |      39771 |       0 |    0 | 19015 |     24 |     72 |          8 |
+|         csr_regfile_i                           |                    csr_regfile |       2833 |       2833 |       0 |    0 |  1618 |      0 |      0 |          0 |
+|         ex_stage_i                              |                       ex_stage |      10952 |      10952 |       0 |    0 |  5782 |      0 |      0 |          8 |
+|           (ex_stage_i)                          |                       ex_stage |          0 |          0 |       0 |    0 |    81 |      0 |      0 |          0 |
+|           csr_buffer_i                          |                     csr_buffer |       1264 |       1264 |       0 |    0 |    13 |      0 |      0 |          0 |
+|           i_mult                                |                           mult |        706 |        706 |       0 |    0 |   462 |      0 |      0 |          8 |
+|             i_multiplier                        |                     multiplier |        364 |        364 |       0 |    0 |   252 |      0 |      0 |          8 |
+|             i_div                               |                         serdiv |        342 |        342 |       0 |    0 |   209 |      0 |      0 |          0 |
+|           lsu_i                                 |                load_store_unit |       8982 |       8982 |       0 |    0 |  5226 |      0 |      0 |          0 |
+|             gen_mmu.i_cva6_mmu                  |                       cva6_mmu |       4559 |       4559 |       0 |    0 |  3536 |      0 |      0 |          0 |
+|               (gen_mmu.i_cva6_mmu)              |                       cva6_mmu |        489 |        489 |       0 |    0 |   184 |      0 |      0 |          0 |
+|               i_dtlb                            |                       cva6_tlb |       1321 |       1321 |       0 |    0 |  1551 |      0 |      0 |          0 |
+|               i_itlb                            |                   cva6_tlb_106 |       1857 |       1857 |       0 |    0 |  1519 |      0 |      0 |          0 |
+|               i_ptw                             |                       cva6_ptw |        876 |        876 |       0 |    0 |   205 |      0 |      0 |          0 |
+|                 (i_ptw)                         |                       cva6_ptw |        438 |        438 |       0 |    0 |   205 |      0 |      0 |          0 |
+|                 i_pmp_ptw                       |                        pmp_107 |        448 |        448 |       0 |    0 |     0 |      0 |      0 |          0 |
+|               i_shared_tlb                      |                cva6_shared_tlb |         16 |         16 |       0 |    0 |    77 |      0 |      0 |          0 |
+|             i_load_unit                         |                      load_unit |        256 |        256 |       0 |    0 |    36 |      0 |      0 |          0 |
+|             i_pipe_reg_load                     |                      shift_reg |       1787 |       1787 |       0 |    0 |   137 |      0 |      0 |          0 |
+|             i_pmp_data_if                       |                    pmp_data_if |        185 |        185 |       0 |    0 |     0 |      0 |      0 |          0 |
+|               i_pmp_data                        |                            pmp |        104 |        104 |       0 |    0 |     0 |      0 |      0 |          0 |
+|               i_pmp_if                          |                        pmp_105 |         81 |         81 |       0 |    0 |     0 |      0 |      0 |          0 |
+|             i_store_unit                        |                     store_unit |        813 |        813 |       0 |    0 |  1205 |      0 |      0 |          0 |
+|               (i_store_unit)                    |                     store_unit |        158 |        158 |       0 |    0 |    83 |      0 |      0 |          0 |
+|               i_amo_buffer                      |                     amo_buffer |         89 |         89 |       0 |    0 |    88 |      0 |      0 |          0 |
+|                 i_amo_fifo                      |   cva6_fifo_v3__parameterized6 |         89 |         89 |       0 |    0 |    88 |      0 |      0 |          0 |
+|               store_buffer_i                    |                   store_buffer |        566 |        566 |       0 |    0 |  1034 |      0 |      0 |          0 |
+|             lsu_bypass_i                        |                     lsu_bypass |       1465 |       1465 |       0 |    0 |   312 |      0 |      0 |          0 |
+|         gen_cache_wt.i_cache_subsystem          |             wt_cache_subsystem |       6201 |       6201 |       0 |    0 |  2324 |     24 |     72 |          0 |
+|           i_adapter                             |                 wt_axi_adapter |       1416 |       1416 |       0 |    0 |   545 |      0 |      0 |          0 |
+|             (i_adapter)                         |                 wt_axi_adapter |       1212 |       1212 |       0 |    0 |   277 |      0 |      0 |          0 |
+|             i_dcache_data_fifo                  |   cva6_fifo_v3__parameterized1 |        109 |        109 |       0 |    0 |   186 |      0 |      0 |          0 |
+|           i_cva6_icache                         |                    cva6_icache |        389 |        389 |       0 |    0 |   136 |      8 |     24 |          0 |
+|             (i_cva6_icache)                     |                    cva6_icache |         93 |         93 |       0 |    0 |   128 |      0 |      0 |          0 |
+|             gen_sram[0].tag_sram                |                  sram_cache_64 |         67 |         67 |       0 |    0 |     0 |      0 |      6 |          0 |
+|               data_sram                         |                        sram_94 |         67 |         67 |       0 |    0 |     0 |      0 |      6 |          0 |
+|                 gen_cut[0].i_tc_sram_wrapper    |             tc_sram_wrapper_95 |         67 |         67 |       0 |    0 |     0 |      0 |      6 |          0 |
+|           i_wt_dcache                           |                      wt_dcache |       4396 |       4396 |       0 |    0 |  1643 |     16 |     48 |          0 |
+|             i_wt_dcache_wbuffer                 |              wt_dcache_wbuffer |       2971 |       2971 |       0 |    0 |  1351 |      0 |      0 |          0 |
+|               (i_wt_dcache_wbuffer)             |              wt_dcache_wbuffer |       1212 |       1212 |       0 |    0 |  1314 |      0 |      0 |          0 |
+|               i_clean_rr                        |    rr_arb_tree__parameterized1 |        223 |        223 |       0 |    0 |     3 |      0 |      0 |          0 |
+|               i_dirty_rr                        |    rr_arb_tree__parameterized0 |        978 |        978 |       0 |    0 |    12 |      0 |      0 |          0 |
+|               i_rtrn_id_fifo                    |                   cva6_fifo_v3 |        540 |        540 |       0 |    0 |    15 |      0 |      0 |          0 |
+|             gen_rd_ports[0].i_wt_dcache_ctrl    |                 wt_dcache_ctrl |        112 |        112 |       0 |    0 |    67 |      0 |      0 |          0 |
+|             gen_rd_ports[1].i_wt_dcache_ctrl    |               wt_dcache_ctrl_1 |        128 |        128 |       0 |    0 |    72 |      0 |      0 |          0 |
+|             i_wt_dcache_mem                     |                  wt_dcache_mem |        658 |        658 |       0 |    0 |    15 |     16 |     48 |          0 |
+|               (i_wt_dcache_mem)                 |                  wt_dcache_mem |        198 |        198 |       0 |    0 |    13 |      0 |      0 |          0 |
+|               gen_data_banks[1].i_data_sram     |   sram_cache__parameterized1_2 |        320 |        320 |       0 |    0 |     0 |      8 |      0 |          0 |
+|                 data_sram                       |           sram__parameterized1 |        320 |        320 |       0 |    0 |     0 |      8 |      0 |          0 |
+|             i_wt_dcache_missunit                |             wt_dcache_missunit |        526 |        526 |       0 |    0 |   138 |      0 |      0 |          0 |
+|               (i_wt_dcache_missunit)            |             wt_dcache_missunit |        345 |        345 |       0 |    0 |    82 |      0 |      0 |          0 |
+|               i_lfsr_inv                        |           lfsr__parameterized0 |        137 |        137 |       0 |    0 |     8 |      0 |      0 |          0 |
+|         gen_perf_counter.perf_counters_i        |                  perf_counters |        179 |        179 |       0 |    0 |   414 |      0 |      0 |          0 |
+|         i_frontend                              |                       frontend |       3025 |       3025 |       0 |    0 |  3943 |      0 |      0 |          0 |
+|           (i_frontend)                          |                       frontend |         21 |         21 |       0 |    0 |   243 |      0 |      0 |          0 |
+|           bht_gen.i_bht                         |                            bht |        171 |        171 |       0 |    0 |   384 |      0 |      0 |          0 |
+|           btb_gen.i_btb                         |                            btb |        585 |        585 |       0 |    0 |  2080 |      0 |      0 |          0 |
+|           i_instr_queue                         |                    instr_queue |       1157 |       1157 |       0 |    0 |  1022 |      0 |      0 |          0 |
+|             (i_instr_queue)                     |                    instr_queue |          2 |          2 |       0 |    0 |    68 |      0 |      0 |          0 |
+|             gen_instr_fifo[0].i_fifo_instr_data |   cva6_fifo_v3__parameterized4 |        964 |        964 |       0 |    0 |   411 |      0 |      0 |          0 |
+|             gen_instr_fifo[1].i_fifo_instr_data | cva6_fifo_v3__parameterized4_0 |        147 |        147 |       0 |    0 |   411 |      0 |      0 |          0 |
+|             i_fifo_address                      |   cva6_fifo_v3__parameterized5 |         44 |         44 |       0 |    0 |   132 |      0 |      0 |          0 |
+|           i_instr_realign                       |                  instr_realign |       1091 |       1091 |       0 |    0 |    84 |      0 |      0 |          0 |
+|           ras_gen.i_ras                         |                            ras |          0 |          0 |       0 |    0 |   130 |      0 |      0 |          0 |
+|         id_stage_i                              |                       id_stage |        318 |        318 |       0 |    0 |   303 |      0 |      0 |          0 |
+|         issue_stage_i                           |                    issue_stage |      17020 |      17020 |       0 |    0 |  4631 |      0 |      0 |          0 |
+|           i_issue_read_operands                 |            issue_read_operands |      13846 |      13846 |       0 |    0 |  2354 |      0 |      0 |          0 |
+|             (i_issue_read_operands)             |            issue_read_operands |      12690 |      12690 |       0 |    0 |   370 |      0 |      0 |          0 |
+|             gen_asic_regfile.i_ariane_regfile   |                 ariane_regfile |       1156 |       1156 |       0 |    0 |  1984 |      0 |      0 |          0 |
+|           i_scoreboard                          |                     scoreboard |       3174 |       3174 |       0 |    0 |  2277 |      0 |      0 |          0 |
++-------------------------------------------------+--------------------------------+------------+------------+---------+------+-------+--------+--------+------------+
 
 
