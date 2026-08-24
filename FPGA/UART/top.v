@@ -131,6 +131,7 @@ module top #(
 
     wire [63:0] c_a0, c_a1, c_a2, c_a3;
     wire [63:0] c_b0, c_b1, c_b2, c_b3;
+    reg  we;
 
     cache u_cache (
         .clk (clk),
@@ -151,8 +152,6 @@ module top #(
     // pair, all driven by the same we/func3/instr_id, running
     // simultaneously rather than sharing one datapath.
     //------------------------------------------------------------
-    reg we;   // shared write-enable: cache, all 4 RegisterFiles, all 4 ALUs
-
     wire [63:0] vs1_0, vs2_0, vs1_1, vs2_1, vs1_2, vs2_2, vs1_3, vs2_3;
     wire [63:0] vd0, vd1, vd2, vd3;
     reg  alu_acc_rst;
