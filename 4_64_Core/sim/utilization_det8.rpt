@@ -1,0 +1,68 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2025.2 (win64) Build 6299465 Fri Nov 14 19:35:11 GMT 2025
+| Date         : Tue Aug 25 12:03:30 2026
+| Host         : AthOS-II running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -hierarchical_depth 8 -file utilization_det8.rpt
+| Design       : zynq_system_wrapper
+| Device       : xc7z020clg484-1
+| Speed File   : -1
+| Design State : Synthesized
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++------------------------------------------------+-----------------------------------------------+------------+------------+---------+------+-------+--------+--------+------------+
+|                    Instance                    |                     Module                    | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs  | RAMB36 | RAMB18 | DSP Blocks |
++------------------------------------------------+-----------------------------------------------+------------+------------+---------+------+-------+--------+--------+------------+
+| zynq_system_wrapper                            |                                         (top) |      86697 |      53929 |   32768 |    0 | 29733 |     24 |     72 |        168 |
+|   zynq_system_i                                |                                   zynq_system |      86697 |      53929 |   32768 |    0 | 29733 |     24 |     72 |        168 |
+|     fpga_top_0                                 |                      zynq_system_fpga_top_0_0 |      86672 |      53904 |   32768 |    0 | 29733 |     24 |     72 |        168 |
+|       inst                                     |             zynq_system_fpga_top_0_0_fpga_top |      86672 |      53904 |   32768 |    0 | 29733 |     24 |     72 |        168 |
+|         u_soc                                  |     zynq_system_fpga_top_0_0_cva6_tinygpu_soc |      50920 |      50920 |       0 |    0 | 29507 |     24 |     72 |        168 |
+|           (u_soc)                              |     zynq_system_fpga_top_0_0_cva6_tinygpu_soc |        828 |        828 |       0 |    0 |     2 |      0 |      0 |          0 |
+|           u_gpu                                |   zynq_system_fpga_top_0_0_tinygpu_cvxif_wrap |      11375 |      11375 |       0 |    0 | 10383 |      0 |      0 |        160 |
+|             fsm_i                              |          zynq_system_fpga_top_0_0_tinygpu_fsm |       5766 |       5766 |       0 |    0 |  2187 |      0 |      0 |          0 |
+|             gpu_i                              |      zynq_system_fpga_top_0_0_fourc_1_wrapper |       5609 |       5609 |       0 |    0 |  8196 |      0 |      0 |        160 |
+|               fourc_1_i                        |              zynq_system_fpga_top_0_0_fourc_1 |       5609 |       5609 |       0 |    0 |  8196 |      0 |      0 |        160 |
+|                 design_1_wrapper_0             |     zynq_system_fpga_top_0_0_design_1_wrapper |       1329 |       1329 |       0 |    0 |  1027 |      0 |      0 |         40 |
+|                 design_1_wrapper_1             | zynq_system_fpga_top_0_0_design_1_wrapper_105 |       1000 |       1000 |       0 |    0 |  1024 |      0 |      0 |         40 |
+|                 design_1_wrapper_2             | zynq_system_fpga_top_0_0_design_1_wrapper_106 |       1000 |       1000 |       0 |    0 |  1024 |      0 |      0 |         40 |
+|                 design_1_wrapper_3             | zynq_system_fpga_top_0_0_design_1_wrapper_107 |       1000 |       1000 |       0 |    0 |  1024 |      0 |      0 |         40 |
+|                 l3_cache_1                     |             zynq_system_fpga_top_0_0_l3_cache |       1280 |       1280 |       0 |    0 |  4097 |      0 |      0 |          0 |
+|           u_shim                               |         zynq_system_fpga_top_0_0_cva6_sv_shim |      38717 |      38717 |       0 |    0 | 19122 |     24 |     72 |          8 |
+|             i_axi_mux                          |              zynq_system_fpga_top_0_0_axi_mux |         87 |         87 |       0 |    0 |   101 |      0 |      0 |          0 |
+|             u_cva6                             |                 zynq_system_fpga_top_0_0_cva6 |      38630 |      38630 |       0 |    0 | 19021 |     24 |     72 |          8 |
+|               csr_regfile_i                    |          zynq_system_fpga_top_0_0_csr_regfile |       2361 |       2361 |       0 |    0 |  1620 |      0 |      0 |          0 |
+|               ex_stage_i                       |             zynq_system_fpga_top_0_0_ex_stage |      10829 |      10829 |       0 |    0 |  5788 |      0 |      0 |          8 |
+|                 (ex_stage_i)                   |             zynq_system_fpga_top_0_0_ex_stage |          0 |          0 |       0 |    0 |    81 |      0 |      0 |          0 |
+|                 csr_buffer_i                   |           zynq_system_fpga_top_0_0_csr_buffer |       1171 |       1171 |       0 |    0 |    13 |      0 |      0 |          0 |
+|                 i_mult                         |                 zynq_system_fpga_top_0_0_mult |        701 |        701 |       0 |    0 |   462 |      0 |      0 |          8 |
+|                 lsu_i                          |      zynq_system_fpga_top_0_0_load_store_unit |       8957 |       8957 |       0 |    0 |  5232 |      0 |      0 |          0 |
+|               gen_cache_wt.i_cache_subsystem   |   zynq_system_fpga_top_0_0_wt_cache_subsystem |       6163 |       6163 |       0 |    0 |  2324 |     24 |     72 |          0 |
+|                 i_adapter                      |       zynq_system_fpga_top_0_0_wt_axi_adapter |       1418 |       1418 |       0 |    0 |   545 |      0 |      0 |          0 |
+|                 i_cva6_icache                  |          zynq_system_fpga_top_0_0_cva6_icache |        387 |        387 |       0 |    0 |   136 |      8 |     24 |          0 |
+|                 i_wt_dcache                    |            zynq_system_fpga_top_0_0_wt_dcache |       4358 |       4358 |       0 |    0 |  1643 |     16 |     48 |          0 |
+|               gen_perf_counter.perf_counters_i |        zynq_system_fpga_top_0_0_perf_counters |        175 |        175 |       0 |    0 |   414 |      0 |      0 |          0 |
+|               i_frontend                       |             zynq_system_fpga_top_0_0_frontend |       2991 |       2991 |       0 |    0 |  3944 |      0 |      0 |          0 |
+|                 (i_frontend)                   |             zynq_system_fpga_top_0_0_frontend |         13 |         13 |       0 |    0 |   243 |      0 |      0 |          0 |
+|                 bht_gen.i_bht                  |                  zynq_system_fpga_top_0_0_bht |        171 |        171 |       0 |    0 |   384 |      0 |      0 |          0 |
+|                 btb_gen.i_btb                  |                  zynq_system_fpga_top_0_0_btb |        585 |        585 |       0 |    0 |  2080 |      0 |      0 |          0 |
+|                 i_instr_queue                  |          zynq_system_fpga_top_0_0_instr_queue |       1129 |       1129 |       0 |    0 |  1022 |      0 |      0 |          0 |
+|                 i_instr_realign                |        zynq_system_fpga_top_0_0_instr_realign |       1093 |       1093 |       0 |    0 |    85 |      0 |      0 |          0 |
+|                 ras_gen.i_ras                  |                  zynq_system_fpga_top_0_0_ras |          0 |          0 |       0 |    0 |   130 |      0 |      0 |          0 |
+|               id_stage_i                       |             zynq_system_fpga_top_0_0_id_stage |        314 |        314 |       0 |    0 |   303 |      0 |      0 |          0 |
+|               issue_stage_i                    |          zynq_system_fpga_top_0_0_issue_stage |      16558 |      16558 |       0 |    0 |  4628 |      0 |      0 |          0 |
+|                 i_issue_read_operands          |  zynq_system_fpga_top_0_0_issue_read_operands |      13390 |      13390 |       0 |    0 |  2351 |      0 |      0 |          0 |
+|                 i_scoreboard                   |           zynq_system_fpga_top_0_0_scoreboard |       3168 |       3168 |       0 |    0 |  2277 |      0 |      0 |          0 |
+|         u_mem                                  |      zynq_system_fpga_top_0_0_axi4_bram_slave |      35752 |       2984 |   32768 |    0 |   224 |      0 |      0 |          0 |
++------------------------------------------------+-----------------------------------------------+------------+------------+---------+------+-------+--------+--------+------------+
+
+

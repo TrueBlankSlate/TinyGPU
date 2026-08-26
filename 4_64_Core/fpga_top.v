@@ -20,15 +20,45 @@
 //     deliberate later step, not attempted here -- it needs its own
 //     clock domain (usually different from the core clock, requiring an
 //     AXI clock-domain-crossing converter) and calibration sequencing.
-//   - No JTAG debug module / UART. Debug visibility here is via the
-//     mark_debug attributes below -- wire these into Vivado's "Set Up
-//     Debug" wizard (or a manually instantiated ILA) after synthesis to
-//     get a live hardware waveform, the direct equivalent of the
-//     dut.u_gpu.* hierarchical peeks used throughout simulation bring-up.
+//   - No JTAG debug module. Debug visibility here is via the mark_debug
+//     attributes below -- wire these into Vivado's "Set Up Debug" wizard
+//     (or a manually instantiated ILA) after synthesis to get a live
+//     hardware waveform, the direct equivalent of the dut.u_gpu.*
+//     hierarchical peeks used throughout simulation bring-up.
+//   - UART output goes through PS7 (processing_system7), not PL fabric --
+//     on ZC702, UART1 is a Zynq MIO pin (MIO48/49), unreachable from pure
+//     PL. fpga_top itself stays PS7-agnostic: the ps7_ar_*/ps7_r_* port
+//     above is a second, read-only AXI4 window into u_mem for PS7's GP0
+//     master to poll the matmul result through (see the block-design Tcl
+//     script and Vitis app that wire this up + print over UART1).
 module fpga_top (
-    input  wire clk_i,     // board oscillator / clocking wizard output
-    input  wire rst_i      // async, active-high (board reset button/POR) --
-                            // inverted+synchronized to rst_ni below
+    input  wire clk_i,     // board oscillator / clocking wizard output --
+                            // once PS7 is added in the block design, this
+                            // is wired to PS7's FCLK_CLK0, not a board pin
+    input  wire rst_i,     // async, active-high -- wired to PS7's
+                            // FCLK_RESET0_N (inverted) once PS7 is added
+
+    // ---- PS7 GP0 read-only window into u_mem (UART result readback) ----
+    // Wired DIRECTLY to processing_system7's M_AXI_GP0 in the block design,
+    // net-by-net, no interconnect/converter IP in between -- sized to match
+    // GP0 exactly (confirmed via get_bd_pins: ARADDR[31:0], ARID[11:0],
+    // ARLEN[3:0], RDATA[31:0], RID[11:0] -- GP0 is a fixed 32-bit AXI3
+    // master on Zynq-7000, not a config choice). Software polls RESULT_ADDR
+    // (0x8000_3000, 16 x 64-bit words = 32 x 32-bit reads, see
+    // sim/tb_cva6_boot.v) through this port and prints it over the same
+    // UART1 the Hello World test already proved out.
+    input  wire [11:0] ps7_ar_id,
+    input  wire [31:0] ps7_ar_addr,
+    input  wire [3:0]  ps7_ar_len,
+    input  wire        ps7_ar_valid,
+    output wire        ps7_ar_ready,
+
+    output wire [11:0] ps7_r_id,
+    output wire [31:0] ps7_r_data,
+    output wire [1:0]  ps7_r_resp,
+    output wire        ps7_r_last,
+    output wire        ps7_r_valid,
+    input  wire        ps7_r_ready
 );
 
   // ---------------- Reset synchronizer ----------------
@@ -140,7 +170,12 @@ module fpga_top (
     .aw_valid(noc_aw_valid), .aw_ready(noc_aw_ready),
     .w_data(noc_w_data), .w_strb(noc_w_strb), .w_last(noc_w_last),
     .w_valid(noc_w_valid), .w_ready(noc_w_ready),
-    .b_id(noc_b_id), .b_resp(noc_b_resp), .b_valid(noc_b_valid), .b_ready(noc_b_ready)
+    .b_id(noc_b_id), .b_resp(noc_b_resp), .b_valid(noc_b_valid), .b_ready(noc_b_ready),
+
+    .ar2_id(ps7_ar_id), .ar2_addr(ps7_ar_addr), .ar2_len(ps7_ar_len),
+    .ar2_valid(ps7_ar_valid), .ar2_ready(ps7_ar_ready),
+    .r2_id(ps7_r_id), .r2_data(ps7_r_data), .r2_resp(ps7_r_resp),
+    .r2_last(ps7_r_last), .r2_valid(ps7_r_valid), .r2_ready(ps7_r_ready)
   );
 
 endmodule
