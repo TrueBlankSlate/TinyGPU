@@ -34,16 +34,16 @@ ARM side (running a bare-metal Vitis app) reads the results straight out of
 PL memory over the GP0 AXI port and prints them over UART.
 
 ```
-                 ┌───────────────────────────── fpga_top (PL) ─────────────────────────────┐
-                 │                                                                          │
-PS7 (ARM) ───────┼──► GP0 AXI ──► axi4_bram_slave (dual-port: boot ROM + result RAM)         │
-  Vitis app      │                        ▲                                                 │
-  (prints        │                        │ AXI (CVA6 fetch/load/store)                     │
-  results        │                        │                                                 │
+                 ┌───────────────────────────── fpga_top (PL) ────────────────────────────────┐
+                 │                                                                            │
+PS7 (ARM) ───────┼──► GP0 AXI ──► axi4_bram_slave (dual-port: boot ROM + result RAM)          │
+  Vitis app      │                        ▲                                                   │
+  (prints        │                        │ AXI (CVA6 fetch/load/store)                       │
+  results        │                        │                                                   │
   over UART)     │      CVA6 core ────────┴──► tinygpu_cvxif_wrap ──► tinygpu_fsm ──► design_1│
                  │   (RISC-V + CV-X-IF)      (custom instr. dispatch)   (FSM,        (4 ALU   │
                  │                                                       AXI wr.)     lanes)  │
-                 └──────────────────────────────────────────────────────────────────────────┘
+                 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### What it does, concretely
