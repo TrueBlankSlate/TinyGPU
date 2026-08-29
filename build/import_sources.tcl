@@ -14,6 +14,7 @@ set build_dir "$repo_root/build"
 # Override this line if your CVA6 clone lives somewhere else.
 set CVA6_ROOT [file normalize "$repo_root/../../CVA6/cva6"]
 
+
 # ---------------------------------------------------------------------
 # 1. External CVA6 core (untouched, shared with 0_2_CVA6)
 # ---------------------------------------------------------------------

@@ -11,7 +11,6 @@ if {[llength $bb]} {
 } else {
     puts "PASS: no axi_smc_0/black box."
 }
-
 report_utilization -hierarchical -hierarchical_depth 8 -file utilization_report.rpt
 puts "\n==== Wrote utilization_report.rpt -- top-level totals below ===="
 report_utilization
