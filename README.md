@@ -86,6 +86,10 @@ read TinyGPU's result memory with the simplest possible address decode.
 <p align="center">
 <img src="/images/zynq_implemented_design.png" alt="Zynq Implemented design" width="50%" height="50%"></p>
 
+### Simulation
+<img width="1010" height="592" alt="image" src="https://github.com/user-attachments/assets/d149974e-534c-4ace-bbf3-a12076f2e395" />
+
+
 ## Repo layout
 
 ```
