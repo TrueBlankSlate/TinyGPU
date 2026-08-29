@@ -7,7 +7,7 @@ CVA6 issues vector-style instructions over the CV-X-IF interface; TinyGPU
 decodes them, runs four ALU lanes in parallel, and writes results back to
 memory over AXI.
 
-![Elaborated design](../Images/elaborated_design.png)
+![Elaborated design](/images/elaborated_design.png)
 
 ## Overview
 
@@ -78,7 +78,7 @@ PS7 (ARM) ───────┼──► GP0 AXI ──► axi4_bram_slave (d
 
 ### Block design (Vivado)
 
-![TinyGPU block design](../Images/tinygpu_block_design.png)
+![TinyGPU block design](/images/tinygpu_block_design.png)
 
 PS7 is configured with the board preset, `M_AXI_GP0` enabled, and a 25MHz
 FPGA clock. `fpga_top` is wired in as a plain RTL module (not packaged as an
@@ -86,7 +86,7 @@ IP), with GP0 connected **directly** to `axi4_bram_slave`'s AXI-lite-style
 read port (no SmartConnect / interconnect in the datapath) so the PS7 can
 read TinyGPU's result memory with the simplest possible address decode.
 
-![Zynq implemented design](../Images/zynq_implemented_design.png)
+![Zynq implemented design](/images/zynq_implemented_design.png)
 
 ## Repo layout
 
