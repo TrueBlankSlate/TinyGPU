@@ -1,7 +1,7 @@
 # TinyGPU
 
 A small SIMD vector accelerator, attached to a [CVA6](https://github.com/openhwgroup/cva6) RISC-V core
-as a custom coprocessor extension (CV-X-IF), that runs 4x4 matrix operations
+as a custom coprocessor extension [(CV-X-IF)](https://docs.openhwgroup.org/projects/cva6-user-manual/01_cva6_user/CVX_Interface_Coprocessor.html), that runs 4x4 matrix operations
 (`vmacc` matrix-multiply, `vadd.vv` elementwise add) on real Zynq-7000 hardware.
 CVA6 issues vector-style instructions over the CV-X-IF interface; TinyGPU
 decodes them, runs four ALU lanes in parallel, and writes results back to
