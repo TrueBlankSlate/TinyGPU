@@ -8,7 +8,7 @@ decodes them, runs four ALU lanes in parallel, and writes results back to
 memory over AXI.
 
 It accepts 64-bit RISC-V Vector Extension standard instructions like `vle64.v vadd.vv vmacc.vv vse64.v `  
-and operates like [ARA] (https://github.com/pulp-platform/ara) in tandem with CVA6.
+and operates like [ARA](https://github.com/pulp-platform/ara) in tandem with CVA6.
 
 ![Elaborated design](/images/elaborated_design.png)
 
