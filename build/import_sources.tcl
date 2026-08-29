@@ -4,9 +4,9 @@
 # works unmodified no matter where it's cloned. Scripts live in build/, so
 # one level up is the repo root.
 set repo_root [file normalize [file dirname [info script]]/..]
-set rtl_dir   "$repo_root/src/rtl"
-set sim_dir   "$repo_root/src/sim"
-set cvxif_dir "$repo_root/cvxif"
+set rtl_dir   "$repo_root/src/rtl/tinygpu"
+set sim_dir   "$repo_root/src/tb"
+set cvxif_dir "$repo_root/src/rtl/cvxif"
 set build_dir "$repo_root/build"
 
 # Convention: clone the CVA6 core repo as a SIBLING of wherever you clone
@@ -241,8 +241,8 @@ set cva6_core_files [list \
 ]
 
 # ---------------------------------------------------------------------
-# 2. TinyGPU RTL -- split across cvxif/ (CVXIF boundary + real AXI slave)
-#    and src/rtl/ (everything else)
+# 2. TinyGPU RTL -- split across src/rtl/cvxif/ (CVXIF boundary + real AXI
+#    slave) and src/rtl/tinygpu/ (everything else)
 # ---------------------------------------------------------------------
 set tg_rtl_files [list \
     $rtl_dir/alu.v \
@@ -264,11 +264,11 @@ set tg_rtl_files [list \
 ]
 
 # ---------------------------------------------------------------------
-# 3. TinyGPU simulation sources (src/sim/, plus axi4_mem_slave.v which
-#    lives in cvxif/ -- includes the Option B fix already applied to
-#    tb_cva6_boot.v: an extra vse64.v writes C_mul out to MUL_RESULT_ADDR
-#    right after vmacc, BEFORE vadd.vv overwrites the shared vd_* latch.
-#    RESULT_ADDR still holds C_add.)
+# 3. TinyGPU simulation sources (src/tb/, plus axi4_mem_slave.v which
+#    lives in src/rtl/cvxif/ -- includes the Option B fix already applied
+#    to tb_cva6_boot.v: an extra vse64.v writes C_mul out to
+#    MUL_RESULT_ADDR right after vmacc, BEFORE vadd.vv overwrites the
+#    shared vd_* latch. RESULT_ADDR still holds C_add.)
 # ---------------------------------------------------------------------
 set tg_sim_files [list \
     $sim_dir/tb_cva6_boot.v \

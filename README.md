@@ -93,13 +93,13 @@ read TinyGPU's result memory with the simplest possible address decode.
 ## Repo layout
 
 ```
-main/
-  boot_image.hex   -- $readmemh preload for axi4_bram_slave (real-hardware boot program)
-  build/           -- Vivado Tcl scripts (source these in order, see below)
+boot_image.hex     -- $readmemh preload for axi4_bram_slave (real-hardware boot program)
+build/             -- Vivado Tcl scripts (source these in order, see below)
+src/rtl/
   cvxif/           -- CV-X-IF glue: AXI slaves, CVA6<->TinyGPU shim, dispatch FSM
-  src/rtl/         -- TinyGPU core: ALU lanes, cache, register file, decoder, writeback
-  src/sim/         -- testbenches (tb_cva6_boot is the main boot+matmul test)
-  vitis/           -- main.c for the PS7 bare-metal app (reads results, prints over UART)
+  tinygpu/         -- TinyGPU core: ALU lanes, cache, register file, decoder, writeback
+src/tb/            -- testbenches (tb_cva6_boot is the main boot+matmul test)
+vitis/             -- main.c for the PS7 bare-metal app (reads results, prints over UART)
 ```
 
 TinyGPU expects a sibling clone of CVA6 on disk, i.e.:
@@ -125,7 +125,7 @@ board preset).
    (or edit `build/build_zynq_bd.tcl` if targeting different hardware).
 2. **Import sources** — open the Tcl console in Vivado and run:
    ```tcl
-   source {<path-to-repo>/main/build/import_sources.tcl}
+   source {<path-to-repo>/build/import_sources.tcl}
    ```
    This adds all CVA6 core files, all TinyGPU RTL/sim files, `boot_image.hex`
    (as a Memory Initialization File), and `build/fpga_top.xdc`, then sets
@@ -135,16 +135,16 @@ board preset).
    the expected memory offsets before touching synthesis.
 4. **Build the block design**:
    ```tcl
-   source {<path-to-repo>/main/build/build_zynq_bd.tcl}
-   source {<path-to-repo>/main/build/connect_gp0_direct.tcl}
-   source {<path-to-repo>/main/build/finalize_bd.tcl}
+   source {<path-to-repo>/build/build_zynq_bd.tcl}
+   source {<path-to-repo>/build/connect_gp0_direct.tcl}
+   source {<path-to-repo>/build/finalize_bd.tcl}
    ```
    This creates the PS7 + `fpga_top` block design, wires GP0 directly to
    `fpga_top`'s AXI read port (no SmartConnect), generates the HDL wrapper,
    and sets it as the top module.
 5. **Run synthesis, implementation, and generate the bitstream**:
    ```tcl
-   source {<path-to-repo>/main/build/rebuild_launch.tcl}
+   source {<path-to-repo>/build/rebuild_launch.tcl}
    ```
    > **Important — out-of-context IP caching:** `fpga_top` lives inside
    > `zynq_system.bd` and gets its own cached out-of-context synthesis run,
