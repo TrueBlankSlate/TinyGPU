@@ -10,7 +10,9 @@ memory over AXI.
 It accepts 64-bit RISC-V Vector Extension standard instructions like `vle64.v vadd.vv vmacc.vv vse64.v `  
 and operates like [ARA](https://github.com/pulp-platform/ara) in tandem with CVA6.
 
-![Elaborated design](/images/elaborated_design.png)
+<p align ="center">
+<img src="/images/tinygpu_exacli.png" alt="Elaborated design" width="70%" height="70%">
+</p>
 
 ## Overview
 
@@ -36,20 +38,7 @@ matrix A, `vmacc` A×A, store, `vadd.vv` A+A, store, loop), and the PS7's
 ARM side (running a bare-metal Vitis app) reads the results straight out of
 PL memory over the GP0 AXI port and prints them over UART.
 
-```
-                 ┌───────────────────────────── fpga_top (PL) ────────────────────────────────┐
-                 │                                                                            │
-PS7 (ARM) ───────┼──► GP0 AXI ──► axi4_bram_slave (dual-port: boot ROM + result RAM)          │
-  Vitis app      │                        ▲                                                   │
-  (prints        │                        │ AXI (CVA6 fetch/load/store)                       │
-  results        │                        │                                                   │
-  over UART)     │      CVA6 core ────────┴──► tinygpu_cvxif_wrap ──► tinygpu_fsm ──► design_1│
-                 │   (RISC-V + CV-X-IF)      (custom instr. dispatch)   (FSM,        (4 ALU   │
-                 │                                                       AXI wr.)     lanes)  │
-                 └────────────────────────────────────────────────────────────────────────────┘
-```
-
-### What it does, concretely
+### Workflow
 
 1. On reset, CVA6 boots directly from `boot_image.hex` (no OS, no bootloader)
    and runs a short hand-assembled RISC-V program that:
@@ -65,12 +54,17 @@ PS7 (ARM) ───────┼──► GP0 AXI ──► axi4_bram_slave (d
 4. The Zynq PS7 (a bare-metal Vitis app, `vitis/main.c`) reads both result
    matrices straight out of that PL memory through the GP0 AXI aperture
    (`0x4000_0000`+) and prints them over UART:
+
+   For vmacc.vv
    ```
    C_mul = A x A (vmacc)
    [   90  100  110  120 ]
    [  202  228  254  280 ]
    [  314  356  398  440 ]
    [  426  484  542  600 ]
+   ```
+   And for vadd.vv
+   ```
 
    C_add = A + A (vadd.vv)
    [    2    4    6    8 ]
@@ -80,8 +74,8 @@ PS7 (ARM) ───────┼──► GP0 AXI ──► axi4_bram_slave (d
    ```
 
 ### Block design (Vivado)
-
-![TinyGPU block design](/images/tinygpu_block_design.png)
+<p align="center">
+<img src="/images/tinygpu_block_design.png" alt="Block Design" width="70%" height="70%"> </p>
 
 PS7 is configured with the board preset, `M_AXI_GP0` enabled, and a 25MHz
 FPGA clock. `fpga_top` is wired in as a plain RTL module (not packaged as an
@@ -89,7 +83,8 @@ IP), with GP0 connected **directly** to `axi4_bram_slave`'s AXI-lite-style
 read port (no SmartConnect / interconnect in the datapath) so the PS7 can
 read TinyGPU's result memory with the simplest possible address decode.
 
-![Zynq implemented design](/images/zynq_implemented_design.png)
+<p align="center">
+<img src="/images/zynq_implemented_design.png" alt="Zynq Implemented design" width="50%" height="50%"></p>
 
 ## Repo layout
 
