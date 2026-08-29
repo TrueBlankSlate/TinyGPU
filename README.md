@@ -88,6 +88,8 @@ read TinyGPU's result memory with the simplest possible address decode.
 
 ### Simulation
 <img width="1010" height="592" alt="image" src="https://github.com/user-attachments/assets/d149974e-534c-4ace-bbf3-a12076f2e395" />
+The initial zero hold is for CVA6 to boot, and then there is the output from matrix multiplication which takes 4 cycles to complete  
+and thenyou have matrix addition taking 1 cycle.
 
 
 ## Repo layout
