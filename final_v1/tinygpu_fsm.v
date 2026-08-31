@@ -67,13 +67,13 @@ module tinygpu_fsm (
 
     // Packed result of the last compute op (vmacc/vec-arith), ready to
     // stream out beat-by-beat during WRITEBACK. Combinational from
-    // fourc_1_wrapper's vd_* outputs -- NOT stable throughout WRITEBACK by
-    // itself: instruction_0 (feeding design_1.v's is_vmacc classification)
-    // updates the instant issue_accept fires for vse64.v itself, which
-    // would flip design_1.v's vd_k select mux away from the just-completed
-    // op's result for that cycle onward if wb_data were read live for
-    // every beat -- see wb_data_q below, latched at issue_accept time
-    // (before that flip takes effect on the next clock edge) as the fix.
+    // fourc_1_wrapper's vd_* outputs. NOT stable throughout WRITEBACK on
+    // its own: the vse64.v instruction driving THIS WRITEBACK is itself
+    // an accepted CVXIF op, so the instant it's accepted, instruction_0
+    // updates to vse64.v's opcode and design_1.v's is_vmacc mux can flip
+    // away from dot_reg mid-stream if the PRECEDING op was vmacc (see
+    // wb_data_q below, which freezes this at accept-time specifically to
+    // route around that).
     input      [1023:0] wb_data,
 
     // To fourc_1_wrapper
@@ -94,15 +94,7 @@ wire       is_vle64    = (opcode == 7'b0000111) && (funct3 == 3'b111);
 // Real RVV store major opcode (STORE-FP space), mirroring vle64.v's
 // LOAD-FP opcode the same way real vse64.v mirrors real vle64.v.
 wire       is_vse64    = (opcode == 7'b0100111) && (funct3 == 3'b111);
-// Real RVV OP-V major opcode covers vmacc/vadd.vv AND vsetvli/vsetivli/
-// vsetvl (the vector-config instructions a real compiler always emits
-// before any vector body). vsetvli's funct3 is 3'b111 (OPCFG) -- exclude
-// it here so CVXIF doesn't claim it as ours. This CVA6 build has no real
-// V extension, so once we stop claiming it, CVA6 takes its normal
-// illegal-instruction trap path instead of us silently driving garbage
-// vs1/vs2/vd fields (a vsetvli's rs1/zimm bits, not real register ids)
-// into the FSM as if it were a vector-arithmetic op.
-wire       is_vec_arith = (opcode == 7'b1010111) && (funct3 != 3'b111);
+wire       is_vec_arith = (opcode == 7'b1010111);
 wire       is_vmacc    = is_vec_arith && (issue_instr[31:26] == 6'h2D);
 wire       is_mine     = is_vle64 | is_vse64 | is_vec_arith;
 
@@ -130,6 +122,25 @@ reg [3:0]  wb_cnt;    // vse64.v write beat counter (0..15)
 reg [1:0]  pass_q;
 reg        pass_done;
 
+// OPTION B FIX (final_v1 only, 4_64_Core untouched): freezes wb_data the
+// instant THIS instruction is accepted, before this same clock edge lets
+// instruction_0 <= issue_instr (below) retarget design_1.v's is_vmacc mux
+// away from dot_reg. Needed because a vse64.v issued immediately after a
+// vmacc (as Option B's boot program now does, to save C_mul before
+// vadd.vv overwrites the shared vd_* latch) is itself an accepted CVXIF
+// instruction -- the moment IT is accepted, instruction_0 flips to
+// vse64.v's opcode, is_vmacc goes false, and the live vd_* wires
+// (writeback.v's combinational inputs) switch from dot_reg (correct
+// C_mul) to alu_settled_* (stale vmacc per-lane products, never the
+// dot-product) for every beat streamed AFTER the first. This never
+// showed up before because vse64.v always followed vadd.vv (already
+// non-vmacc, so the mux never flips mid-stream). The first beat (loaded
+// in the same issue_accept cycle, before this register updates) still
+// reads live wb_data correctly -- only the WRITEBACK-state streaming
+// beats (beats 1-15, read on later cycles after the mux has already
+// flipped) need the frozen snapshot instead.
+reg [1023:0] wb_data_q;
+
 // Latches a commit pulse that matches our tracked transaction, even if it
 // arrives before we reach WAIT_COMMIT. CVA6's cvxif_issue_register_commit_
 // if_driver.sv drives commit_valid_o = issue_valid_o && issue_ready_i --
@@ -141,11 +152,6 @@ reg        pass_done;
 // a live-only check in WAIT_COMMIT misses that pulse entirely and the FSM
 // hangs forever.
 reg        commit_recv_q;
-
-// Frozen copy of wb_data, captured the same cycle issue_accept fires (see
-// wb_data's port comment above) -- WRITEBACK's beats after the first are
-// sourced from this, not the live wb_data wire.
-reg [1023:0] wb_data_q;
 
 assign issue_ready  = (state == IDLE);
 assign issue_accept = (state == IDLE) && issue_valid && is_mine;
@@ -192,7 +198,7 @@ always @(posedge clk) begin
         result_valid<= 1'b0;
         instruction_0 <= 32'd0;
         commit_recv_q <= 1'b0;
-        wb_data_q     <= 1024'd0;
+        wb_data_q   <= 1024'd0;
     end else begin
         // Default pulse signals low every cycle
         we_0        <= 1'b0;
@@ -226,11 +232,9 @@ always @(posedge clk) begin
                     is_vmacc_q <= is_vmacc;
                     is_vse64_q <= is_vse64;
                     instruction_0 <= issue_instr;
-
-                    // Latch BEFORE instruction_0 flips (that update isn't
-                    // visible until the next clock edge -- see wb_data_q's
-                    // declaration comment) so this cycle's read still sees
-                    // the just-completed op's result, not vse64.v's own.
+                    // Sampled BEFORE this same edge's instruction_0 update
+                    // takes effect -- still reflects the correct (pre-flip)
+                    // vd_* mux state. See wb_data_q's declaration comment.
                     wb_data_q  <= wb_data;
 
                     if (is_vle64) begin

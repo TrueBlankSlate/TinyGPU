@@ -1,8 +1,4 @@
 `timescale 1ns / 1ps
-
-//VERY IMPORTANT: in tcl console: run 4000ns minimum. CVA6 boot takes 3345ns
-
-
 // Full-pipeline boot test: real CVA6 fetches a real boot program from a
 // behavioral AXI4 memory, hits the illegal-instruction->CVXIF offload path
 // for real, and drives cva6_sv_shim.sv's actual struct-packed ports.
@@ -52,19 +48,17 @@
 // convention there); it was changed to give each core a COLUMN of both A
 // and B instead -- the same transpose-read vmacc already used for B --
 // so "core N" means the same thing (column N) regardless of op.
-//
-// Option B (matmul then matadd, two writebacks): vmacc's result (C_mul)
-// used to get silently overwritten by vadd.vv before vse64.v ever ran,
-// because both ops share the same vd_* output latch (WAW hazard -- see
-// design_1.v's dot_reg/alu_settled_* muxing, and its is_vmacc_q fix). Fix:
-// store C_mul out to its OWN address immediately after vmacc, before
-// vadd.vv runs and clobbers vd_*. RESULT_ADDR still stores C_add.
 module tb_cva6_boot;
 
   localparam [63:0] BOOT_ADDR    = 64'h0000_0000_8000_0000;
   localparam [63:0] MAT_ADDR     = 64'h0000_0000_8000_1000;
-
-  localparam [63:0] MUL_RESULT_ADDR = 64'h0000_0000_8000_2000; // vse64.v writeback dest for C_mul
+  // OPTION B FIX (final_v1 only, 4_64_Core untouched): vmacc's result
+  // (C_mul) used to get silently overwritten by vadd.vv before vse64.v
+  // ever ran, because both ops share the same vd_* output latch (WAW
+  // hazard -- see design_1.v's dot_reg/alu_settled_* muxing). Fix: store
+  // C_mul out to its OWN address immediately after vmacc, before vadd.vv
+  // runs and clobbers vd_*. RESULT_ADDR keeps storing C_add, unchanged.
+  localparam [63:0] MUL_RESULT_ADDR = 64'h0000_0000_8000_2000; // vse64.v writeback dest for C_mul (NEW)
   localparam [63:0] RESULT_ADDR  = 64'h0000_0000_8000_3000; // vse64.v writeback destination for C_add
 
   reg clk = 0;
@@ -144,23 +138,41 @@ module tb_cva6_boot;
     .b_id(noc_b_id), .b_resp(noc_b_resp), .b_valid(noc_b_valid), .b_ready(noc_b_ready)
   );
 
+  // ---- "Linker output" -- pre-encoded 32-bit machine words. ----
+  // This is what an assembler's last pass would hand the linker: mnemonic
+  // in, raw opcode out. No field concatenation happens anywhere below --
+  // every localparam here is the literal 32-bit instruction word CVA6 will
+  // fetch, exactly as it would appear in an objdump listing. Encodings were
+  // derived once (by hand, from the RV32/64I and our custom opcode formats)
+  // and cross-checked against the values CVA6 itself decoded in simulation
+  // (e.g. VMACC below matches the `00000000b420a057` seen in the
+  // scoreboard's commit_instr_o during bring-up).
   localparam [31:0] I_LUI   = 32'h800010B7; // lui   x1, 0x80001      -> x1 = 0xFFFFFFFF80001000 (RV64 lui sign-extends since imm bit31 is set)
   localparam [31:0] I_SLLI  = 32'h02009093; // slli  x1, x1, 32       -> x1 = 0x8000100000000000
   localparam [31:0] I_SRLI  = 32'h0200D093; // srli  x1, x1, 32       -> x1 = 0x0000000080001000 (zero-extend idiom, real matrix base addr)
   localparam [31:0] I_VLE64 = 32'h0020F007; // vle64.v vs1=1, vs2=2   (custom opcode 0000111, funct3=111 width tag) -- load A into L3 line1, B(=A) into line2
   localparam [31:0] I_VMACC = 32'hB420A057; // vmacc   vs1=1, vs2=2   (custom opcode 1010111, funct6=0x2D)          -- C_mul = A x A
   localparam [31:0] I_VADD  = 32'h002081D7; // vadd.vv vs1=1, vs2=2   (real RVV encoding: opcode 1010111, funct3=000/OPIVV, funct6=0x00) -- C_add = A + A
-  localparam [31:0] I_LUI_MUL = 32'h800020B7; // lui x1, 0x80002      -> x1 = 0xFFFFFFFF80002000 (MUL_RESULT_ADDR, same sign-extend pattern as I_LUI/I_LUI2)
+  localparam [31:0] I_LUI_MUL = 32'h800020B7; // lui x1, 0x80002      -> x1 = 0xFFFFFFFF80002000 (NEW: MUL_RESULT_ADDR, same sign-extend pattern as I_LUI/I_LUI2)
   localparam [31:0] I_LUI2  = 32'h800030B7; // lui   x1, 0x80003      -> x1 = 0xFFFFFFFF80003000 (writeback dest addr, same sign-extend situation as I_LUI)
-  localparam [31:0] I_VSE64 = 32'h0000F027; // vse64.v rs1=1          (real RVV store opcode 0100111, funct3=111 width tag) -- writes the last compute result to x1
+  localparam [31:0] I_VSE64 = 32'h0000F027; // vse64.v rs1=1          (real RVV store opcode 0100111, funct3=111 width tag) -- writes the last compute result (C_add) to x1 = RESULT_ADDR
   localparam [31:0] I_JAL   = 32'h0000006F; // jal   x0, 0             infinite self-loop (park the core once done)
   localparam [31:0] I_NOP   = 32'h00000013; // addi  x0, x0, 0         real RV64I nop, pad word only, never reached
 
+  // ---- Matrix A/B "data section" -- pre-encoded 64-bit data words. ----
+  // A = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]] (row-major),
+  // B = A (same 16 words repeated), so C = A x A -- directly comparable to
+  // tb_matmul.v's hand-computed expected result.
   localparam [63:0] D_A00 = 64'd1,  D_A01 = 64'd2,  D_A02 = 64'd3,  D_A03 = 64'd4;
   localparam [63:0] D_A10 = 64'd5,  D_A11 = 64'd6,  D_A12 = 64'd7,  D_A13 = 64'd8;
   localparam [63:0] D_A20 = 64'd9,  D_A21 = 64'd10, D_A22 = 64'd11, D_A23 = 64'd12;
   localparam [63:0] D_A30 = 64'd13, D_A31 = 64'd14, D_A32 = 64'd15, D_A33 = 64'd16;
 
+  // Snapshot storage -- captured the instant each op's completion is
+  // detected, before anything else (like CVA6 issuing the next op) can
+  // overwrite the live vd_* wires. $display reads from these, never from
+  // the live DUT signals directly, so a later op finishing quickly can't
+  // contaminate an earlier op's printout.
   reg [63:0] c_mul [0:3][0:3];
   reg [63:0] c_add [0:3][0:3];
 
@@ -169,16 +181,16 @@ module tb_cva6_boot;
     // consecutive 64-bit words (2 x 32-bit instrs/word, little-endian word
     // pairing).
     //
-    // Option B: inserted lui_mul/slli/srli/vse64.v (writes C_mul to
+    // OPTION B FIX: inserted lui_mul/slli/srli/vse64.v (writes C_mul to
     // MUL_RESULT_ADDR) immediately after vmacc and BEFORE vadd.vv, so
     // vmacc's result is captured to memory before vadd.vv's write to the
     // same vd_* latch clobbers it. vadd.vv's own store to RESULT_ADDR
     // (C_add) is unchanged, just shifted later in program order.
     u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)]   = {I_SLLI,    I_LUI};    // +0x00 lui,      +0x04 slli
     u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+1] = {I_VLE64,   I_SRLI};   // +0x08 srli,     +0x0c vle64
-    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+2] = {I_LUI_MUL, I_VMACC};  // +0x10 vmacc,    +0x14 lui_mul
-    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+3] = {I_SRLI,    I_SLLI};   // +0x18 slli,     +0x1c srli (reused ops)
-    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+4] = {I_VADD,    I_VSE64};  // +0x20 vse64.v (writes C_mul), +0x24 vadd.vv
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+2] = {I_LUI_MUL, I_VMACC};  // +0x10 vmacc,    +0x14 lui_mul (NEW)
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+3] = {I_SRLI,    I_SLLI};   // +0x18 slli,     +0x1c srli (NEW, reused ops)
+    u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+4] = {I_VADD,    I_VSE64};  // +0x20 vse64.v (writes C_mul, NEW), +0x24 vadd.vv
     u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+5] = {I_SLLI,    I_LUI2};   // +0x28 lui2,     +0x2c slli (reused)
     u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+6] = {I_VSE64,   I_SRLI};   // +0x30 srli (reused), +0x34 vse64.v (writes C_add)
     u_noc_mem.mem[u_noc_mem.widx(BOOT_ADDR)+7] = {I_NOP,     I_JAL};    // +0x38 jal (self-loop), +0x3c nop (unreachable pad)
@@ -273,7 +285,7 @@ module tb_cva6_boot;
     $display("  %0d %0d %0d %0d", c_add[2][0], c_add[2][1], c_add[2][2], c_add[2][3]);
     $display("  %0d %0d %0d %0d", c_add[3][0], c_add[3][1], c_add[3][2], c_add[3][3]);
 
-    // ---- Option B: C_mul's own vse64.v ran BEFORE vadd.vv in program
+    // ---- OPTION B FIX: C_mul's own vse64.v ran BEFORE vadd.vv in program
     // order (see the instruction packing above), so by the time we've
     // already confirmed vadd.vv completed (the vd_0_0==2 poll above), this
     // write is long done -- no extra synchronization needed, just read it.

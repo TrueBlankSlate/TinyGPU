@@ -1,0 +1,12 @@
+What changed vs. the old boot_image.hex (hand-encoded hex, typed by hand):
+
+- Source is now real C-ish assembly (boot_matmul.S), not raw hex. Address setup (li x1, 0x80001000 etc.) is written as a mnemonic and a real assembler (riscv-none-elf-gcc/as) picks the encoding — you were previously hand-deriving lui/slli/srli bit patterns by hand and could get one wrong with no way to notice.
+- boot_image.hex is now a build output, not a hand-typed file. build.sh → elf2hex.py generates it mechanically from the compiled ELF. Before, you had to keep the hex and the testbench's instruction packing in sync by hand across multiple files — that's exactly the kind of drift that caused bugs like the stale-ALU-pass one.
+- The 4 custom ops (vle64.v/vmacc/vadd.vv/vse64.v) are still hand-picked .word literals — that part hasn't changed, and can't yet (hardware doesn't understand real RVV). So this isn't "the compiler figured out the matmul," it's "the compiler now handles the boring/error-prone scalar glue so the only hand-written part is the 4 opcodes that actually need to be hand-written."
+
+Why this is better than fully hardcoded:
+1. Fewer places to make a manual encoding mistake (only 4 fixed literals now, not the whole program).
+2. Changing addresses/adding more scalar setup code is just editing C-like assembly and rebuilding, not re-deriving hex by hand.
+3. elf2hex.py enforces the memory-layout math (widx()) in code instead of a person doing it by hand each time.
+
+It's a real improvement in how the program gets built, not yet a change in what the hardware can run — that second part (real RVV, arbitrary matmul sizes) is the bigger, still-undone project we discussed.

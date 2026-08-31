@@ -98,12 +98,23 @@ module design_1
   // combinationally at all times.
   reg  [63:0]  alu_settled_0, alu_settled_1, alu_settled_2, alu_settled_3;
 
-  // is_vmacc itself is also live/combinational off instruction_0 -- same
-  // staleness hazard as alu_settled_k above applies to the vd_k select
-  // mux itself: the instant a NEW instruction is accepted, is_vmacc flips
-  // immediately (before RegisterFile/ALU have settled for it), which for
-  // one gap cycle would select dot_reg[]/alu_settled_* using the WRONG
-  // op's classification. Latch it the same way, only on we_0_d1.
+  // OPTION B FIX (final_v1 only, 4_64_Core untouched): the vd_0..vd_3
+  // MUX SELECT itself was still combinational off live is_vmacc (which
+  // tracks instruction_0, i.e. ANY accepted instruction, not just compute
+  // ones). A vse64.v accepted right after a vmacc -- which Option B's
+  // boot program now does, to save C_mul before vadd.vv overwrites it --
+  // is not a compute op, but accepting it still updates instruction_0,
+  // flips is_vmacc false, and swaps the mux from dot_reg (correct C_mul)
+  // to alu_settled (still holding vmacc's last-pass raw per-lane
+  // products, not a dot-product) for as long as vse64.v's WRITEBACK is
+  // in flight -- a real, visible glitch on vd_* itself (confirmed in the
+  // waveform), not just in the AXI writeback data (already separately
+  // fixed via tinygpu_fsm.v's wb_data_q snapshot). Fix: latch the mux
+  // SELECT the same way dot_reg/alu_settled latch their DATA -- only on
+  // we_0_d1 (an actual compute settle), so vd_* holds its previous valid
+  // value steady across any number of non-compute instructions in
+  // between, instead of re-deciding which register to show on every
+  // instruction_0 change.
   reg          is_vmacc_q;
 
   always @(posedge clk_0) begin

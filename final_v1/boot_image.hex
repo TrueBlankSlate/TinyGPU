@@ -9,8 +9,8 @@
 //   RESULT_ADDR     = 0x8000_3000 -> index 1536 (0x600, left zero --
 //                                     written at runtime by vse64.v)
 //
-// Boot program (Option B -- see sim/tb_cva6_boot.v for the full derivation
-// of each word; this MUST be kept byte-for-byte in sync with that file's
+// Boot program (Option B -- see tb_cva6_boot.v for the full derivation of
+// each word; this MUST be kept byte-for-byte in sync with that file's
 // instruction packing, since this is the only program real hardware runs --
 // tb_cva6_boot.v's own `initial` block only feeds simulation):
 //   lui x1,0x80001 / slli x1,x1,32 / srli x1,x1,32 / vle64.v / vmacc /
