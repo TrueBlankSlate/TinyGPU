@@ -220,3 +220,4 @@ regenerate the bitstream (see the out-of-context caching note above),
 **re-export hardware**, and rebuild the Vitis platform/application against
 the fresh `.xsa` — an app built against a stale `.xsa` will boot the old
 hardware even if the bitstream on disk is current.
+
