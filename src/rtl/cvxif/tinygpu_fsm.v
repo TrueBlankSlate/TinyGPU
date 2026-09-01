@@ -25,7 +25,7 @@ module tinygpu_fsm (
     output reg         result_valid,
     output     [2:0]   result_id,
 
-    // Real AXI4 read master (for vle64 memory loads) - same channel shape
+    // Real AXI4 read master (for vle64 memory loads) -- same channel shape
     // as CVA6's own noc_ar_*/noc_r_* so this can be arbitered onto the
     // same physical memory with axi_mux, not a separate fake protocol.
     // One burst of 32 x 64-bit beats (2048 bits total) per vle64.v, not
@@ -44,7 +44,7 @@ module tinygpu_fsm (
     input              r_valid,
     output             r_ready,
 
-    // Real AXI4 write master (for vse64.v writeback) - same channel shape
+    // Real AXI4 write master (for vse64.v writeback) -- same channel shape
     // as the read master above, arbitered onto the same shared bus. One
     // burst of 16 x 64-bit beats (1024 bits total, one 4x4 result matrix)
     // per vse64.v, sourced from wb_data (see writeback.v).
@@ -65,6 +65,15 @@ module tinygpu_fsm (
     input              b_valid,
     output             b_ready,
 
+    // Packed result of the last compute op (vmacc/vec-arith), ready to
+    // stream out beat-by-beat during WRITEBACK. Combinational from
+    // fourc_1_wrapper's vd_* outputs -- NOT stable throughout WRITEBACK by
+    // itself: instruction_0 (feeding design_1.v's is_vmacc classification)
+    // updates the instant issue_accept fires for vse64.v itself, which
+    // would flip design_1.v's vd_k select mux away from the just-completed
+    // op's result for that cycle onward if wb_data were read live for
+    // every beat -- see wb_data_q below, latched at issue_accept time
+    // (before that flip takes effect on the next clock edge) as the fix.
     input      [1023:0] wb_data,
 
     // To fourc_1_wrapper
@@ -85,7 +94,15 @@ wire       is_vle64    = (opcode == 7'b0000111) && (funct3 == 3'b111);
 // Real RVV store major opcode (STORE-FP space), mirroring vle64.v's
 // LOAD-FP opcode the same way real vse64.v mirrors real vle64.v.
 wire       is_vse64    = (opcode == 7'b0100111) && (funct3 == 3'b111);
-wire       is_vec_arith = (opcode == 7'b1010111);
+// Real RVV OP-V major opcode covers vmacc/vadd.vv AND vsetvli/vsetivli/
+// vsetvl (the vector-config instructions a real compiler always emits
+// before any vector body). vsetvli's funct3 is 3'b111 (OPCFG) -- exclude
+// it here so CVXIF doesn't claim it as ours. This CVA6 build has no real
+// V extension, so once we stop claiming it, CVA6 takes its normal
+// illegal-instruction trap path instead of us silently driving garbage
+// vs1/vs2/vd fields (a vsetvli's rs1/zimm bits, not real register ids)
+// into the FSM as if it were a vector-arithmetic op.
+wire       is_vec_arith = (opcode == 7'b1010111) && (funct3 != 3'b111);
 wire       is_vmacc    = is_vec_arith && (issue_instr[31:26] == 6'h2D);
 wire       is_mine     = is_vle64 | is_vse64 | is_vec_arith;
 
@@ -108,19 +125,32 @@ reg [31:0] instr_q; //queue
 reg [3:0]  wb_cnt;    // vse64.v write beat counter (0..15)
 
 // vmacc pass tracking (4 passes: pass 0..3, one output row per pass,
-// one we_0 fire per clock cycle - cache.v is purely combinational so a
+// one we_0 fire per clock cycle -- cache.v is purely combinational so a
 // new pass_0's row is visible to RegisterFile the same cycle it changes)
 reg [1:0]  pass_q;
 reg        pass_done;
 
-//fix for vmacc.vv stale pass
+// Latches a commit pulse that matches our tracked transaction, even if it
+// arrives before we reach WAIT_COMMIT. CVA6's cvxif_issue_register_commit_
+// if_driver.sv drives commit_valid_o = issue_valid_o && issue_ready_i --
+// i.e. synchronously with issue, not as a separate later event (this
+// config never speculates, so it always commits immediately). Since
+// issue_ready is tied high, commit_valid for a given id can pulse the
+// exact same cycle issue_accept fires for it, long before the LOAD/
+// L3_WRITE burst (32 beats) finishes and WAIT_COMMIT is even entered --
+// a live-only check in WAIT_COMMIT misses that pulse entirely and the FSM
+// hangs forever.
+reg        commit_recv_q;
+
+// Frozen copy of wb_data, captured the same cycle issue_accept fires (see
+// wb_data's port comment above) -- WRITEBACK's beats after the first are
+// sourced from this, not the live wb_data wire.
 reg [1023:0] wb_data_q;
-reg commit_recv_q;
 
 assign issue_ready  = (state == IDLE);
 assign issue_accept = (state == IDLE) && issue_valid && is_mine;
 assign result_id    = id_q;
-// Always ready to accept beats once the burst is under way - real AXI4
+// Always ready to accept beats once the burst is under way -- real AXI4
 // bursts auto-increment addressing on the interconnect side, so unlike
 // the old 8-beat scheme we don't need to gate readiness on a per-beat
 // address handshake.
@@ -129,46 +159,52 @@ assign b_ready        = (state == WRITEBACK);
 
 always @(posedge clk) begin
     if (!rst_ni) begin
-        state <= IDLE; //<===========
-        id_q <= 3'd0;
+        state       <= IDLE;
+        id_q        <= 3'd0;
         is_vle64_q  <= 1'b0;
         is_vmacc_q  <= 1'b0;
         is_vse64_q  <= 1'b0;
         instr_q     <= 32'd0;
-        w_data_0 <= 2048'd0;
-        ar_id    <= 4'd0;
-        ar_addr  <= 64'd0;
-        ar_len   <= 8'd0;
-        ar_size  <= 3'd0;
-        ar_burst <= 2'd0;
-        ar_valid <= 1'b0;
-        aw_id    <= 4'd0;
-        aw_addr  <= 64'd0;
-        aw_len   <= 8'd0;
-        aw_size  <= 3'd0;
-        aw_burst <= 2'd0;
-        aw_valid <= 1'b0;
-        w_data   <= 64'd0;
-        w_strb   <= 8'd0;
-        w_last   <= 1'b0;
-        w_valid  <= 1'b0;
-        wb_cnt   <= 4'd0;
-        we_0     <= 1'b0;
-        we_1     <= 1'b0;
-        pass_0   <= 2'd0;
-        pass_q   <= 2'd0;
+        w_data_0    <= 2048'd0;
+        ar_id       <= 4'd0;
+        ar_addr     <= 64'd0;
+        ar_len      <= 8'd0;
+        ar_size     <= 3'd0;
+        ar_burst    <= 2'd0;
+        ar_valid    <= 1'b0;
+        aw_id       <= 4'd0;
+        aw_addr     <= 64'd0;
+        aw_len      <= 8'd0;
+        aw_size     <= 3'd0;
+        aw_burst    <= 2'd0;
+        aw_valid    <= 1'b0;
+        w_data      <= 64'd0;
+        w_strb      <= 8'd0;
+        w_last      <= 1'b0;
+        w_valid     <= 1'b0;
+        wb_cnt      <= 4'd0;
+        we_0        <= 1'b0;
+        we_1        <= 1'b0;
+        pass_0      <= 2'd0;
+        pass_q      <= 2'd0;
         pass_done   <= 1'b0;
         acc_rst_out <= 1'b0;
         result_valid<= 1'b0;
         instruction_0 <= 32'd0;
         commit_recv_q <= 1'b0;
-        wb_data_q   <= 1024'd0;
+        wb_data_q     <= 1024'd0;
     end else begin
         // Default pulse signals low every cycle
         we_0        <= 1'b0;
         we_1        <= 1'b0;
         acc_rst_out <= 1'b0;
 
+        // Capture a matching commit pulse the instant it appears, whatever
+        // state we're in -- see commit_recv_q's declaration comment above.
+        // Checked against issue_id during the same-cycle accept (id_q isn't
+        // latched yet then) and against id_q afterwards. WAIT_COMMIT below
+        // can still override this back to 0 in the same cycle it consumes
+        // the commit (case runs after this, so its assignment wins).
         if (state == IDLE && issue_accept) begin
             commit_recv_q <= commit_valid && (commit_id == issue_id);
         end else if (commit_valid && (commit_id == id_q)) begin
@@ -190,13 +226,17 @@ always @(posedge clk) begin
                     is_vmacc_q <= is_vmacc;
                     is_vse64_q <= is_vse64;
                     instruction_0 <= issue_instr;
-                    
+
+                    // Latch BEFORE instruction_0 flips (that update isn't
+                    // visible until the next clock edge -- see wb_data_q's
+                    // declaration comment) so this cycle's read still sees
+                    // the just-completed op's result, not vse64.v's own.
                     wb_data_q  <= wb_data;
 
                     if (is_vle64) begin
                         // One AXI4 burst: 32 beats x 8 bytes = 2048 bits.
                         // The interconnect auto-increments the address per
-                        // beat - no manual per-beat address math needed.
+                        // beat -- no manual per-beat address math needed.
                         ar_id    <= 4'd0;
                         ar_addr  <= issue_rs1;
                         ar_len   <= 8'd31;
@@ -205,7 +245,12 @@ always @(posedge clk) begin
                         ar_valid <= 1'b1;
                         state    <= LOAD;
                     end else if (is_vse64) begin
-                        
+                        // One AXI4 write burst: 16 beats x 8 bytes = 1024
+                        // bits -- the last compute op's full result matrix,
+                        // packed by writeback.v. AW and the first W beat are
+                        // presented together; axi4_mem_slave.v (and any
+                        // compliant AXI4 slave) won't actually accept W
+                        // until AW lands, so w_ready naturally gates this.
                         aw_id    <= 4'd0;
                         aw_addr  <= issue_rs1;
                         aw_len   <= 8'd15;
@@ -230,9 +275,9 @@ always @(posedge clk) begin
                     ar_valid <= 1'b0;
                 end
 
-                /* Data phase: shift each 64-bit beat in; r_last (real AXI4) 
-                tells us the burst is done instead of counting to a fixed
-                beat number ourselves. */
+                // Data phase: shift each 64-bit beat in; r_last (real AXI4)
+                // tells us the burst is done instead of counting to a fixed
+                // beat number ourselves.
                 if (r_valid && r_ready) begin
                     w_data_0 <= {r_data, w_data_0[2047:64]};
                     if (r_last) begin
@@ -265,13 +310,18 @@ always @(posedge clk) begin
                     end else begin
                         wb_cnt  <= wb_cnt + 4'd1;
                         // wb_data_q (frozen at issue_accept), not live
-                        // wb_data - see wb_data_q's declaration comment.
+                        // wb_data -- see wb_data_q's declaration comment.
                         w_data  <= wb_data_q[(wb_cnt + 4'd1)*64 +: 64];
                         w_last  <= (wb_cnt + 4'd1 == 4'd15);
                         w_valid <= 1'b1;
                     end
                 end
 
+                // b_ready is asserted combinationally (assign b_ready =
+                // state==WRITEBACK, above) -- once the slave posts its
+                // write response, head to WAIT_COMMIT the same way LOAD's
+                // L3_WRITE does, so vse64.v goes through the exact same
+                // commit-catching machinery vle64.v already relies on.
                 if (b_valid && b_ready) begin
                     state <= WAIT_COMMIT;
                 end
@@ -299,10 +349,21 @@ always @(posedge clk) begin
                 // Then signal result
                 if (!result_valid) begin
                     if (is_vmacc_q && !pass_done) begin
-                        
+                        // vmacc (4x4 matmul) needs 4 passes: pass i broadcasts
+                        // row i of A to every core, which already holds a
+                        // fixed column of B, producing that pass's output row.
+                        // pass 0 was already fired by WAIT_COMMIT's we_0 pulse.
+                        // One we_0 fire per cycle -- cache.v is combinational,
+                        // so the new pass_0's row is visible to RegisterFile
+                        // the same cycle pass_0 changes, no settle cycle needed.
                         if (pass_q == 2'd3) begin
                             pass_done   <= 1'b1;
-                            acc_rst_out <= 1'b1; 
+                            acc_rst_out <= 1'b1; // reset acc for next vmacc op
+                            // result_valid deliberately not set here --
+                            // this we_0 pulse's dot_reg[3] capture lands
+                            // one cycle later; the (!pass_done) check
+                            // failing next cycle falls through to the
+                            // else branch below, giving that cycle to land.
                         end else begin
                             pass_q <= pass_q + 2'd1;
                             pass_0 <= pass_q + 2'd1;

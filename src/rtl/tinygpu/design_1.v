@@ -84,9 +84,26 @@ module design_1
   reg  [63:0]  dot_reg [0:3];
   integer      dr_i;
 
+  // Non-vmacc ops used to expose alu_vd_k live (pure combinational, no
+  // registration at all). The instant a NEW instruction is accepted,
+  // instruction_0/func3_0/instr_id_0 switch immediately, flipping is_vmacc
+  // and re-evaluating the ALU's op -- but RegisterFile hasn't been reloaded
+  // with the new instruction's operands yet (that takes 1 cycle via we_0).
+  // For that one gap cycle, the ALU combinationally computed [new op] on
+  // [old op]'s still-registered operands, e.g. vmacc's last-pass row/column
+  // added together under vadd.vv's opcode -- a real, visible garbage value.
+  // Fix: latch alu_vd_k the same way dot_reg latches dot_sum -- only on
+  // we_0_d1 (exactly the cycle RegisterFile+ALU have settled for the
+  // CURRENT instruction), holding steady otherwise instead of tracking
+  // combinationally at all times.
   reg  [63:0]  alu_settled_0, alu_settled_1, alu_settled_2, alu_settled_3;
 
-  // instruction_0 change.
+  // is_vmacc itself is also live/combinational off instruction_0 -- same
+  // staleness hazard as alu_settled_k above applies to the vd_k select
+  // mux itself: the instant a NEW instruction is accepted, is_vmacc flips
+  // immediately (before RegisterFile/ALU have settled for it), which for
+  // one gap cycle would select dot_reg[]/alu_settled_* using the WRONG
+  // op's classification. Latch it the same way, only on we_0_d1.
   reg          is_vmacc_q;
 
   always @(posedge clk_0) begin
@@ -119,6 +136,14 @@ module design_1
   assign vd_2 = is_vmacc_q ? dot_reg[2] : alu_settled_2;
   assign vd_3 = is_vmacc_q ? dot_reg[3] : alu_settled_3;
 
+  // keep_hierarchy="yes" on these 8 instances: diagnostic, not a functional
+  // change. Default synthesis has been merging/moving logic across these
+  // specific module boundaries, which is why RegisterFile (confirmed
+  // trivial 2-register RTL) and ALU have been reporting wildly
+  // inconsistent per-instance utilization numbers across otherwise-
+  // identical siblings. This forces each instance to keep its own true
+  // boundary, so report_utilization's numbers for these actually mean
+  // what they say.
   (* keep_hierarchy = "yes" *) ALU ALU_0
        (.acc_rst(acc_rst_0),
         .clk(clk_0),

@@ -269,10 +269,19 @@ set tg_rtl_files [list \
 #    lives in src/rtl/cvxif/ -- includes the Option B fix already applied
 #    to tb_cva6_boot.v: an extra vse64.v writes C_mul out to
 #    MUL_RESULT_ADDR right after vmacc, BEFORE vadd.vv overwrites the
-#    shared vd_* latch. RESULT_ADDR still holds C_add.)
+#    shared vd_* latch. RESULT_ADDR still holds C_add.
+#
+#    tb_boot_image.v is a second testbench that instantiates the REAL,
+#    synthesizable axi4_bram_slave.v and $readmemh's the exact
+#    boot_image.hex real hardware loads (fw/build.sh's output), unlike
+#    tb_cva6_boot.v which pokes a hand-written instruction stream directly
+#    into axi4_mem_slave.v's array and never touches boot_image.hex at
+#    all. Use it to verify a freshly rebuilt boot_image.hex BEFORE
+#    touching synth/impl/hardware.)
 # ---------------------------------------------------------------------
 set tg_sim_files [list \
     $sim_dir/tb_cva6_boot.v \
+    $sim_dir/tb_boot_image.v \
     $sim_dir/tb_matmul.v \
     $sim_dir/tb_tinygpu_cvxif.v \
     $cvxif_dir/axi4_mem_slave.v \
@@ -337,6 +346,13 @@ puts "boot_image.hex, fpga_top.xdc added."
 puts "Sim top set to tb_cva6_boot -- run behavioral simulation now to"
 puts {confirm MUL_RESULT_ADDR+15 == 600 (C_mul row3 col3) and}
 puts {RESULT_ADDR+15 == 32 (C_add row3 col3) before running synth/impl.}
+puts ""
+puts "If you rebuild boot_image.hex from fw/ (fw/build.sh), re-run this"
+puts "script and switch sim top to tb_boot_image instead:"
+puts {  set_property top tb_boot_image [get_filesets sim_1]}
+puts "-- it $readmemh's boot_image.hex through the real axi4_bram_slave.v,"
+puts "the same path real hardware takes, rather than tb_cva6_boot.v's"
+puts "hand-poked instruction stream."
 puts ""
 puts "NOTE: the PS7 block design (zynq_system.bd) is NOT created by this"
 puts "script -- that's a separate step. Once sim confirms Option B works,"
