@@ -282,6 +282,8 @@ set tg_sim_files [list \
     $sim_dir/tb_tinygpu_cvxif.v \
     $sim_dir/axi4_mem_slave.v \
     $sim_dir/tb_boot_image.v \
+    $sim_dir/tb_speedup_cycles.v \
+    $sim_dir/tb_bench_image.v \
 ]
 
 # ---------------------------------------------------------------------
@@ -291,9 +293,28 @@ add_files -norecurse $cva6_core_files
 add_files -norecurse $tg_rtl_files
 add_files -fileset sim_1 -norecurse $tg_sim_files
 
-# boot_image.hex -- axi4_bram_slave.v's $readmemh INIT_FILE.
+# boot_image.hex -- axi4_bram_slave.v's $readmemh INIT_FILE. Written by
+# fw/build.sh (default target) to the core root -- the same file this line
+# imports. Run fw/build.sh once (needs a RISC-V toolchain) if it is stale.
 add_files -norecurse -fileset sources_1 $core_dir/boot_image.hex
 set_property file_type "Memory Initialization Files" [get_files $core_dir/boot_image.hex]
+
+# bench_image.hex -- the benchmark build (fw/build.sh bench). Optional: only
+# present after that target has been run. To benchmark on hardware, swap the
+# project's active MIF from boot_image.hex to bench_image.hex (comment the
+# two lines above, uncomment none -- just re-run this script after editing,
+# or set the property by hand), rebuild the bitstream through a full OOC
+# rebuild (never a bare reset_run -- see the README out-of-context caching
+# note), re-export the .xsa, and rebuild the Vitis app. bench_image.hex adds
+# a csrr-mcycle bracket around the scalar matmul and the TinyGPU offload and
+# leaves both cycle deltas in BRAM for vitis/main.c to print over UART.
+if {[file exists $core_dir/bench_image.hex]} {
+    add_files -norecurse -fileset sources_1 $core_dir/bench_image.hex
+    set_property file_type "Memory Initialization Files" [get_files $core_dir/bench_image.hex]
+    puts "bench_image.hex found and added (benchmark build present)."
+} else {
+    puts "bench_image.hex not present -- run 'fw/build.sh bench' to create it."
+}
 
 # Constraints
 add_files -fileset constrs_1 -norecurse $core_dir/fpga_top.xdc
@@ -341,5 +362,13 @@ puts "hand-written instruction stream directly into memory and never reads"
 puts "boot_image.hex at all). Use it to verify the fw/ compiler-produced"
 puts "boot_image.hex (Option B: matmul then matadd) BEFORE touching"
 puts "hardware: set_property top tb_boot_image \[get_filesets sim_1\]"
+puts ""
+puts "Benchmarking testbenches also added:"
+puts "  tb_speedup_cycles -- sim-only scalar-vs-offload cycle count via"
+puts "    \$time deltas + internal probes; prints a speedup summary."
+puts "  tb_bench_image    -- \$readmemh's bench_image.hex through the real"
+puts "    axi4_bram_slave.v and checks the csrr-mcycle deltas fw/bench_matmul.S"
+puts "    leaves in BRAM (scalar > offload, results still correct)."
+puts "  Run either with e.g. set_property top tb_bench_image \[get_filesets sim_1\]"
 puts ""
 puts "Next: 03_build_bd.tcl"

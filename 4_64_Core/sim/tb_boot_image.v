@@ -29,8 +29,10 @@ module tb_boot_image;
   // exactly which Vivado copies "Memory Initialization Files" into the
   // sim snapshot dir vs. not; an absolute path sidesteps that entirely.
   // Edit this if this repo is ever cloned somewhere other than
-  // D:/TinyGPU/TinyGPU.
-  localparam INIT_FILE = "D:/TinyGPU/TinyGPU/4_64_Core/fw/boot_image.hex";
+  // D:/TinyGPU/TinyGPU. NOTE: fw/build.sh now writes boot_image.hex to the
+  // core root (REPO_ROOT/boot_image.hex), the same file build/
+  // 02_import_sources.tcl imports -- not fw/boot_image.hex.
+  localparam INIT_FILE = "D:/TinyGPU/TinyGPU/4_64_Core/boot_image.hex";
 
   reg clk = 0;
   reg rst_ni = 0;

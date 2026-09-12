@@ -1,8 +1,11 @@
 /*
- * boot_matmul.S -- real-toolchain replacement for the hand-assembled
- * Option B boot program (lui/slli/srli/vle64/vmacc/vadd.vv/vse64.v/jal)
- * currently hand-encoded in final_v1/sim/tb_cva6_boot.v and
- * final_v1/boot_image.hex.
+ * boot_matmul.S -- real-toolchain source for boot_image.hex (the
+ * $readmemh preload real hardware boots from). Replaces the old
+ * hand-assembled Option B boot program (lui/slli/srli/vle64/vmacc/
+ * vadd.vv/vse64.v/jal) that used to be hand-encoded directly into
+ * boot_image.hex; src/tb/tb_cva6_boot.v still hand-encodes the same
+ * program for its own `initial`-block preload (a testbench convenience,
+ * independent of this file/boot_image.hex).
  *
  * Assembled by a real RISC-V toolchain (see build.sh) with
  * -march=rv64im -mabi=lp64 -- DELIBERATELY NO 'v' IN -march. TinyGPU's

@@ -10,3 +10,53 @@ Why this is better than fully hardcoded:
 3. elf2hex.py enforces the memory-layout math (widx()) in code instead of a person doing it by hand each time.
 
 It's a real improvement in how the program gets built, not yet a change in what the hardware can run — that second part (real RVV, arbitrary matmul sizes) is the bigger, still-undone project we discussed.
+================================================================
+Hardware performance benchmark (fw/bench_matmul.S)
+================================================================
+
+Goal: a real cycle number for "offload the 4x4 matmul to TinyGPU" vs
+"run it on CVA6's scalar pipeline", measured ON the FPGA (not Spike --
+Spike has no timing model and no idea the CV-X-IF coprocessor exists).
+
+Method: the RISC-V mcycle CSR (0xB00). Verified implemented + free-running
+on this CVA6 config (cv64a6_imafdc_sv39, PerfCounterEn=1, RVZicntr=1); an
+M-mode read never traps. bench_matmul.S runs bare-metal in M-mode.
+
+  fw/bench_matmul.S  -- new. Two csrr-mcycle-bracketed phases, one boot:
+    Phase A: scalar RV64IM ld/ld/mul/add triple loop, C_s = A x A ->
+             0x8000_5000; delta -> 0x8000_4000.
+    Phase B: the existing vle64/vmacc/vse64/vadd.vv/vse64 sequence, then
+             poll C_add[3][3]==32 so the window covers the AXI writeback
+             drain; delta -> 0x8000_4008.
+  fw/build.sh        -- gained a `bench` target: ./build.sh bench builds
+                        bench_matmul.S -> ../bench_image.hex. Default
+                        (no arg) still builds boot_matmul.S -> boot_image.hex.
+                        (Also synced from TinyGPU-main: writes boot_image.hex
+                        to the core ROOT now, the file 02_import_sources.tcl
+                        actually imports -- the old script wrote fw/, which
+                        the project never picked up.)
+  sim/tb_bench_image.v      -- new. $readmemh's bench_image.hex through the
+                        real axi4_bram_slave.v, checks results still correct
+                        and scalar_delta > offload_delta. Zero-fills X BRAM
+                        words so the CPU-side poll doesn't branch on X.
+  sim/tb_speedup_cycles.v  -- copied from TinyGPU-main. Sim-only $time-based
+                        scalar-vs-offload cycle count; its "CVA6 matmul-only"
+                        number is the cross-check for bench_matmul.S's
+                        scalar mcycle delta (should agree within a few cycles).
+  vitis/main.c        -- new (4_64_Core had none). Existing C_mul/C_add grid
+                        prints, plus reads the two cycle deltas from the GP0
+                        aperture (+0x4000 / +0x4008) and prints cycles /
+                        speedup / us at 25 MHz. Prints a "not a bench build"
+                        note if the deltas read 0 (i.e. booted boot_image.hex).
+  build/02_import_sources.tcl -- adds the two sim files; adds bench_image.hex
+                        as an optional MIF (only if present).
+
+Known limitation: firmware can't see FSM COMPUTE -> result_valid, so the
+offload number is issue->writeback-visible, not the pure ~4-cycle vmacc.
+The pure-compute figure needs an ILA (scripts/mark_debug_signals.tcl
+already stages the right nets) -- not done here.
+
+To run: install a RISC-V toolchain, `cd fw && ./build.sh bench`, then
+simulate sim/tb_bench_image.v, then (hardware) import bench_image.hex as
+the MIF instead of boot_image.hex, full OOC bitstream rebuild, re-export
+.xsa, rebuild the Vitis app, boot, read UART.

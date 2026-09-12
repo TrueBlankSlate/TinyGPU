@@ -154,12 +154,22 @@ module fpga_top (
   // with the same boot program + matrices tb_cva6_boot.v used, via
   // $readmemh (boot_image.hex), baked into the bitstream at synthesis
   // time. No DDR needed for this first bring-up.
+  //
+  // *** MANUAL TOGGLE FOR BENCHMARKING ***
+  // To boot fw/bench_matmul.S's benchmark build instead of the plain demo,
+  // change the string below to "bench_image.hex", then do a FULL rebuild
+  // (fpga_top lives inside zynq_system.bd's out-of-context synthesis run --
+  // reset_target all + generate_target all -force on the .bd, i.e.
+  // rebuild_launch.tcl / the 06-09 scripts in order, never a bare
+  // reset_run synth_1, or the bitstream will silently keep the old
+  // boot_image.hex -- see README's out-of-context caching note). Change it
+  // back to "boot_image.hex" and rebuild again to restore the plain demo.
   axi4_bram_slave #(
     .ID_WIDTH   (5),
     .ADDR_WIDTH (64),
     .DATA_WIDTH (64),
     .MEM_WORDS  (8192),
-    .INIT_FILE  ("boot_image.hex")
+    .INIT_FILE  ("bench_image.hex")
   ) u_mem (
     .clk(clk_i), .rst_ni(rst_ni),
     .ar_id(noc_ar_id), .ar_addr(noc_ar_addr), .ar_len(noc_ar_len),

@@ -8,7 +8,7 @@
 # CVA6_ROOT) from the project's own state, not from this variable, so
 # changing it here is safe and needs no other edits.
 
-set proj_name "TinyGPU_Compiler"
+set proj_name "Benchmarking"
 set proj_dir  "D:/Vivado_Projects/$proj_name"
 
 create_project $proj_name $proj_dir -part xc7z020clg484-1 -force
