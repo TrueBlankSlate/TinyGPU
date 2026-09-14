@@ -284,6 +284,8 @@ set tg_sim_files [list \
     $sim_dir/tb_boot_image.v \
     $sim_dir/tb_matmul.v \
     $sim_dir/tb_tinygpu_cvxif.v \
+    $sim_dir/tb_speedup_cycles.v \
+    $sim_dir/tb_bench_image.v \
     $cvxif_dir/axi4_mem_slave.v \
 ]
 
@@ -300,6 +302,22 @@ add_files -fileset sim_1 -norecurse $tg_sim_files
 # 0_2_CVA6.
 add_files -norecurse -fileset sources_1 $repo_root/boot_image.hex
 set_property file_type "Memory Initialization Files" [get_files $repo_root/boot_image.hex]
+
+# bench_image.hex -- the benchmark build (fw/build.sh bench). Optional: only
+# present after that target has been run. To benchmark on hardware, swap
+# fpga_top.v's axi4_bram_slave INIT_FILE string from "boot_image.hex" to
+# "bench_image.hex" (see the *** MANUAL TOGGLE *** comment there), rebuild
+# the bitstream through a full OOC rebuild (rebuild_launch.tcl, never a bare
+# reset_run), re-export the .xsa, and rebuild the Vitis app. bench_image.hex
+# brackets the scalar matmul and the TinyGPU offload with csrr-mcycle reads
+# and leaves both cycle deltas in BRAM for vitis/main.c to print over UART.
+if {[file exists $repo_root/bench_image.hex]} {
+    add_files -norecurse -fileset sources_1 $repo_root/bench_image.hex
+    set_property file_type "Memory Initialization Files" [get_files $repo_root/bench_image.hex]
+    puts "bench_image.hex found and added (benchmark build present)."
+} else {
+    puts "bench_image.hex not present -- run 'fw/build.sh bench' to create it."
+}
 
 # Constraints
 add_files -fileset constrs_1 -norecurse $build_dir/fpga_top.xdc
@@ -353,6 +371,15 @@ puts {  set_property top tb_boot_image [get_filesets sim_1]}
 puts "-- it $readmemh's boot_image.hex through the real axi4_bram_slave.v,"
 puts "the same path real hardware takes, rather than tb_cva6_boot.v's"
 puts "hand-poked instruction stream."
+puts ""
+puts "Benchmarking testbenches also added:"
+puts "  tb_speedup_cycles -- sim-only scalar-vs-offload cycle count via"
+puts "    \$time deltas + internal probes; prints a speedup summary."
+puts "  tb_bench_image    -- \$readmemh's bench_image.hex (fw/build.sh bench)"
+puts "    through the real axi4_bram_slave.v and checks the csrr-mcycle"
+puts "    deltas fw/bench_matmul.S leaves in BRAM (scalar > offload, results"
+puts "    still correct). Run with:"
+puts {  set_property top tb_bench_image [get_filesets sim_1]}
 puts ""
 puts "NOTE: the PS7 block design (zynq_system.bd) is NOT created by this"
 puts "script -- that's a separate step. Once sim confirms Option B works,"
